@@ -9,7 +9,7 @@ var ensureString   = require('es5-ext/object/validate-stringifiable-value')
   , unserialize    = require('dbjs/_setup/unserialize/value')
   , level          = require('levelup')
 
-  , promisify = deferred.promisify
+  , stringify = JSON.stringify, promisify = deferred.promisify
   , getOpts = { fillCache: false };
 
 var loadValue = function (dbjs, key, value) {
@@ -33,6 +33,7 @@ module.exports = function (dbjs, conf/*, options*/) {
 		def = deferred();
 		result = [];
 		db.createReadStream(conf).on('data', function (data) {
+			if (data.key[0] === '_') return; // custom record
 			result.push(loadValue(dbjs, data.key, data.value));
 		}).on('error', function (err) { def.reject(err); }).on('end', function () {
 			def.resolve(result);
@@ -40,11 +41,21 @@ module.exports = function (dbjs, conf/*, options*/) {
 		return def.promise;
 	};
 	return {
+		getCustom: function (key) {
+			key = ensureString(key);
+			if (key[0] !== '_') {
+				throw new Error("Provided key " + stringify(key) + " is not a valid custom key");
+			}
+			return db.getPromised(key, getOpts)(function (value) { return value; }, function (err) {
+				if (err.notFound) return null;
+				throw err;
+			});
+		},
 		loadValue: function (id) {
 			return db.getPromised(id, getOpts)(function (value) {
 				return loadValue(dbjs, id, value);
 			}, function (err) {
-				if (err.notFound) return false;
+				if (err.notFound) return null;
 				throw err;
 			});
 		},
@@ -53,6 +64,13 @@ module.exports = function (dbjs, conf/*, options*/) {
 			return load({ gte: id, lte: id + '/\uffff' });
 		},
 		loadAll: function () { return load(); },
+		storeCustom: function (key, value) {
+			key = ensureString(key);
+			if (key[0] !== '_') {
+				throw new Error("Provided key " + stringify(key) + " is not a valid custom key");
+			}
+			return db.putPromised(key, value);
+		},
 		storeValue: function (event) {
 			return db.putPromised(event.object.__valueId__, event.stamp + '.' + serialize(event.value));
 		},
