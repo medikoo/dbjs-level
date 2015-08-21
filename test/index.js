@@ -8,7 +8,7 @@ var deferred = require('deferred')
 
   , dbPath = resolve(__dirname, 'test-db');
 
-require('level');
+require('leveldown');
 
 module.exports = function (t, a, d) {
 	var db = new Database()
