@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "es5-ext": "^0.10.7",
+    "d": "^0.1.1",
     "deferred": "0.7.2",
     "dbjs": "git://github.com/medikoo/dbjs.git#3fe872510be972927b3a9b1ae26bb8fdbaff80b4",
     "levelup": "^1.2.1",
