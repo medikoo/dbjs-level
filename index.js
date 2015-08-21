@@ -16,7 +16,7 @@ var clear          = require('es5-ext/array/#/clear')
   , level          = require('levelup')
 
   , isModelId = RegExp.prototype.test.bind(/^[A-Z]/)
-  , stringify = JSON.stringify, promisify = deferred.promisify
+  , create = Object.create, stringify = JSON.stringify, promisify = deferred.promisify
   , getOpts = { fillCache: false };
 
 var LevelDriver = module.exports = Object.defineProperties(function (dbjs, data) {
@@ -43,6 +43,8 @@ var LevelDriver = module.exports = Object.defineProperties(function (dbjs, data)
 Object.defineProperties(LevelDriver.prototype, assign({
 	_loadValue: d(function (key, value) {
 		var index = value.indexOf('.'), stamp = Number(value.slice(0, index)), proto;
+		if (this._loadedEventsMap[key + '.' + stamp]) return;
+		this._loadedEventsMap[key + '.' + stamp] = true;
 		value = unserialize(value.slice(index + 1), this.db.objects);
 		if (value && value.__id__ && (value.constructor.prototype === value)) proto = value.constructor;
 		return new Event(this.db.objects.unserialize(key, proto), value, stamp, 'persistentLayer');
@@ -102,6 +104,7 @@ Object.defineProperties(LevelDriver.prototype, assign({
 	}),
 	close: d(function () { return this.levelDb.closePromised(); })
 }, lazy({
+	_loadedEventsMap: d(function () { return create(null); }),
 	_eventsToStore: d(function () { return []; }),
 	_storeEvents: d(function () {
 		return once(function () {
