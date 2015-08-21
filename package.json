@@ -18,6 +18,7 @@
     "levelup": "^1.2.1"
   },
   "devDependencies": {
+    "fs2": "^0.2.1",
     "leveldown": "^1.4",
     "tad": "^0.2.2",
     "xlint": "^0.2.1",
