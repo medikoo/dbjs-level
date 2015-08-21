@@ -1,6 +1,7 @@
 'use strict';
 
-var ensureCallable = require('es5-ext/object/valid-callable')
+var clear          = require('es5-ext/array/#/clear')
+  , ensureCallable = require('es5-ext/object/valid-callable')
   , ensureString   = require('es5-ext/object/validate-stringifiable-value')
   , ensureObject   = require('es5-ext/object/valid-object')
   , deferred       = require('deferred')
@@ -8,6 +9,7 @@ var ensureCallable = require('es5-ext/object/valid-callable')
   , Event          = require('dbjs/_setup/event')
   , serialize      = require('dbjs/_setup/serialize/value')
   , unserialize    = require('dbjs/_setup/unserialize/value')
+  , once           = require('timers-ext/once')
   , level          = require('levelup')
 
   , isModelId = RegExp.prototype.test.bind(/^[A-Z]/)
@@ -24,7 +26,7 @@ var loadValue = function (dbjs, key, value) {
 var defaultAutoSaveFilter = function (event) { return !isModelId(event.object.master.__id__); };
 
 module.exports = function (dbjs, conf/*, options*/) {
-	var db, load, autoSaveFilter, storeValue;
+	var db, load, autoSaveFilter, storeValues, storeEvents, events = [];
 	ensureDatabase(dbjs);
 	ensureObject(conf);
 	db = level(ensureString(conf.path), arguments[1]);
@@ -46,10 +48,15 @@ module.exports = function (dbjs, conf/*, options*/) {
 		});
 		return def.promise;
 	};
+	storeEvents = once(function () {
+		storeValues(events);
+		clear.call(events);
+	});
 	dbjs.objects.on('update', function (event) {
 		if (event.sourceId === 'persistentLayer') return;
 		if (!autoSaveFilter(event)) return;
-		storeValue(event);
+		events.push(event);
+		storeEvents();
 	});
 	return {
 		getCustom: function (key) {
@@ -82,10 +89,10 @@ module.exports = function (dbjs, conf/*, options*/) {
 			}
 			return db.putPromised(key, value);
 		},
-		storeValue: storeValue = function (event) {
+		storeValue: function (event) {
 			return db.putPromised(event.object.__valueId__, event.stamp + '.' + serialize(event.value));
 		},
-		storeValues: function (events) {
+		storeValues: storeValues = function (events) {
 			return db.batchPromised(events.map(function (event) {
 				return { type: 'put', key: event.object.__valueId__,
 					value: event.stamp + '.' + serialize(event.value) };

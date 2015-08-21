@@ -15,7 +15,8 @@
     "es5-ext": "^0.10.7",
     "deferred": "0.7.2",
     "dbjs": "git://github.com/medikoo/dbjs.git#3fe872510be972927b3a9b1ae26bb8fdbaff80b4",
-    "levelup": "^1.2.1"
+    "levelup": "^1.2.1",
+    "timers-ext": "0.1"
   },
   "devDependencies": {
     "fs2": "^0.2.1",
