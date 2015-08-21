@@ -21,14 +21,15 @@ var loadValue = function (dbjs, key, value) {
 	return new Event(dbjs.objects.unserialize(key, proto), value, stamp, 'persistentLayer');
 };
 
-var defaultSaveFilter = function (event) { return !isModelId(event.object.master.__id__); };
+var defaultAutoSaveFilter = function (event) { return !isModelId(event.object.master.__id__); };
 
 module.exports = function (dbjs, conf/*, options*/) {
-	var db, load, saveFilter, storeValue;
+	var db, load, autoSaveFilter, storeValue;
 	ensureDatabase(dbjs);
 	ensureObject(conf);
 	db = level(ensureString(conf.path), arguments[1]);
-	saveFilter = (conf.saveFilter != null) ? ensureCallable(conf.saveFilter) : defaultSaveFilter;
+	autoSaveFilter = (conf.autoSaveFilter != null)
+		? ensureCallable(conf.autoSaveFilter) : defaultAutoSaveFilter;
 	db.getPromised = promisify(db.get);
 	db.putPromised = promisify(db.put);
 	db.batchPromised = promisify(db.batch);
@@ -47,7 +48,7 @@ module.exports = function (dbjs, conf/*, options*/) {
 	};
 	dbjs.objects.on('update', function (event) {
 		if (event.sourceId === 'persistentLayer') return;
-		if (!saveFilter(event)) return;
+		if (!autoSaveFilter(event)) return;
 		storeValue(event);
 	});
 	return {
