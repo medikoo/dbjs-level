@@ -15,7 +15,7 @@
     "es5-ext": "^0.10.7",
     "d": "^0.1.1",
     "deferred": "0.7.2",
-    "dbjs": "git://github.com/medikoo/dbjs.git#3fe872510be972927b3a9b1ae26bb8fdbaff80b4",
+    "dbjs": "git://github.com/medikoo/dbjs.git#a6915412a585eb5722d0077f60ed6b05a5f7e570",
     "levelup": "^1.2.1",
     "timers-ext": "0.1"
   },
