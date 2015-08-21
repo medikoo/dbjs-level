@@ -1,6 +1,7 @@
 'use strict';
 
-var ensureString   = require('es5-ext/object/validate-stringifiable-value')
+var ensureCallable = require('es5-ext/object/valid-callable')
+  , ensureString   = require('es5-ext/object/validate-stringifiable-value')
   , ensureObject   = require('es5-ext/object/valid-object')
   , deferred       = require('deferred')
   , ensureDatabase = require('dbjs/valid-dbjs')
@@ -9,6 +10,7 @@ var ensureString   = require('es5-ext/object/validate-stringifiable-value')
   , unserialize    = require('dbjs/_setup/unserialize/value')
   , level          = require('levelup')
 
+  , isModelId = RegExp.prototype.test.bind(/^[A-Z]/)
   , stringify = JSON.stringify, promisify = deferred.promisify
   , getOpts = { fillCache: false };
 
@@ -16,14 +18,17 @@ var loadValue = function (dbjs, key, value) {
 	var index = value.indexOf('.'), stamp = Number(value.slice(0, index)), proto;
 	value = unserialize(value.slice(index + 1), dbjs.objects);
 	if (value && value.__id__ && (value.constructor.prototype === value)) proto = value.constructor;
-	return new Event(dbjs.objects.unserialize(key, proto), value, stamp);
+	return new Event(dbjs.objects.unserialize(key, proto), value, stamp, 'persistentLayer');
 };
 
+var defaultSaveFilter = function (event) { return !isModelId(event.object.master.__id__); };
+
 module.exports = function (dbjs, conf/*, options*/) {
-	var db, load;
+	var db, load, saveFilter, storeValue;
 	ensureDatabase(dbjs);
 	ensureObject(conf);
 	db = level(ensureString(conf.path), arguments[1]);
+	saveFilter = (conf.saveFilter != null) ? ensureCallable(conf.saveFilter) : defaultSaveFilter;
 	db.getPromised = promisify(db.get);
 	db.putPromised = promisify(db.put);
 	db.batchPromised = promisify(db.batch);
@@ -40,6 +45,11 @@ module.exports = function (dbjs, conf/*, options*/) {
 		});
 		return def.promise;
 	};
+	dbjs.objects.on('update', function (event) {
+		if (event.sourceId === 'persistentLayer') return;
+		if (!saveFilter(event)) return;
+		storeValue(event);
+	});
 	return {
 		getCustom: function (key) {
 			key = ensureString(key);
@@ -71,7 +81,7 @@ module.exports = function (dbjs, conf/*, options*/) {
 			}
 			return db.putPromised(key, value);
 		},
-		storeValue: function (event) {
+		storeValue: storeValue = function (event) {
 			return db.putPromised(event.object.__valueId__, event.stamp + '.' + serialize(event.value));
 		},
 		storeValues: function (events) {
