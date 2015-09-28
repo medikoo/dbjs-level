@@ -16,7 +16,7 @@
     "d": "^0.1.1",
     "deferred": "0.7.2",
     "dbjs": "git://github.com/medikoo/dbjs.git#a6915412a585eb5722d0077f60ed6b05a5f7e570",
-    "dbjs-persistence": "git://github.com/medikoo/dbjs-persistence.git#25f0b6334d2c0fb5",
+    "dbjs-persistence": "git://github.com/medikoo/dbjs-persistence.git#c8f0271944ef315d373",
     "levelup": "^1.2.1",
     "timers-ext": "0.1"
   },
