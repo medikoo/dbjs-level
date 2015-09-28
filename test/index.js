@@ -19,12 +19,12 @@ module.exports = function (t, a, d) {
 	  , zzz = db.Object.newNamed('zzz');
 
 	deferred(
-		driver.storeValue(zzz._lastOwnEvent_),
-		driver.storeValue(bar._lastOwnEvent_),
-		driver.storeValue(foo._lastOwnEvent_),
-		driver.storeValue(aaa._lastOwnEvent_)
+		driver.storeEvent(zzz._lastOwnEvent_),
+		driver.storeEvent(bar._lastOwnEvent_),
+		driver.storeEvent(foo._lastOwnEvent_),
+		driver.storeEvent(aaa._lastOwnEvent_)
 	)(function () {
-		return driver.storeValues([
+		return driver.storeEvents([
 			new Event(aaa.getOwnDescriptor('sdfds'), 'sdfs'),
 			new Event(zzz.getOwnDescriptor('sdfffds'), 'sdfs'),
 			new Event(foo.getOwnDescriptor('raz'), 'marko'),
