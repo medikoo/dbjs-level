@@ -1,12 +1,12 @@
 'use strict';
 
-var setPrototypeOf = require('es5-ext/object/set-prototype-of')
-  , ensureString   = require('es5-ext/object/validate-stringifiable-value')
-  , ensureObject   = require('es5-ext/object/valid-object')
-  , d              = require('d')
-  , deferred       = require('deferred')
-  , serialize      = require('dbjs/_setup/serialize/value')
-  , level          = require('levelup')
+var setPrototypeOf    = require('es5-ext/object/set-prototype-of')
+  , ensureString      = require('es5-ext/object/validate-stringifiable-value')
+  , ensureObject      = require('es5-ext/object/valid-object')
+  , d                 = require('d')
+  , deferred          = require('deferred')
+  , serialize         = require('dbjs/_setup/serialize/value')
+  , level             = require('levelup')
   , PersistenceDriver = require('dbjs-persistence/abstract')
 
   , promisify = deferred.promisify
