@@ -9,7 +9,8 @@ var setPrototypeOf    = require('es5-ext/object/set-prototype-of')
   , level             = require('levelup')
   , PersistenceDriver = require('dbjs-persistence/abstract')
 
-  , promisify = deferred.promisify
+  , isArray = Array.isArray, stringify = JSON.stringify
+  , create = Object.create, parse = JSON.parse, promisify = deferred.promisify
   , getOpts = { fillCache: false };
 
 var LevelDriver = module.exports = function (dbjs, data) {
@@ -34,6 +35,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		result = [];
 		this.levelDb.createReadStream(data).on('data', function (data) {
 			var index, event;
+			if (data.key[0] === '=') return; // computed record
 			if (data.key[0] === '_') return; // custom record
 			index = data.value.indexOf('.');
 			event = this._importValue(data.key, data.value.slice(index + 1),
@@ -75,6 +77,36 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			return { type: 'put', key: event.object.__valueId__,
 				value: event.stamp + '.' + serialize(event.value) };
 		}));
+	}),
+	_getComputed: d(function (id) {
+		return this.levelDb.getPromised('=' + id, getOpts)(function (data) {
+			var index = data.indexOf('.'), value = data.slice(index + 1);
+			if (value[0] === '[') value = parse(value);
+			return { value: value, stamp: Number(data.slice(0, index)) };
+		}.bind(this), function (err) {
+			if (err.notFound) return null;
+			throw err;
+		});
+	}),
+	_getAllComputed: d(function (keyPath) {
+		var def, map = create(null);
+		def = deferred();
+		this.levelDb.createReadStream({ gte: '=', lte: '=\uffff' }).on('data', function (data) {
+			var index, id = data.key.slice(1), value
+			  , objId = id.split('/', 1)[0], localKeyPath = id.slice(objId.length + 1);
+			if (localKeyPath !== keyPath) return;
+			index = data.value.indexOf('.');
+			value = data.value.slice(index + 1);
+			if (isArray(value)) value = parse(value);
+			map[id] = { value: value, stamp: Number(data.value.slice(0, index)) };
+		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+			def.resolve(map);
+		});
+		return def.promise;
+	}),
+	_storeComputed: d(function (id, value, stamp) {
+		return this.levelDb.putPromised('=' + id,
+			stamp + '.' + (isArray(value) ? stringify(value) : value));
 	}),
 	_close: d(function () { return this.levelDb.closePromised(); })
 });

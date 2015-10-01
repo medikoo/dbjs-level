@@ -18,6 +18,18 @@ module.exports = function (t, a, d) {
 	  , foo = db.Object.newNamed('foo')
 	  , zzz = db.Object.newNamed('zzz');
 
+	db.Object.prototype.defineProperties({
+		bar: { value: 'elo' },
+		computed: { value: function () {
+			return 'foo' + this.bar;
+		} },
+		computedSet: { value: function () {
+			return [this.bar, this.computed];
+		}, multiple: true }
+	});
+
+	driver.trackComputed(db.Object, 'computed');
+	driver.trackComputed(db.Object, 'computedSet');
 	deferred(
 		driver.storeEvent(zzz._lastOwnEvent_),
 		driver.storeEvent(bar._lastOwnEvent_),
