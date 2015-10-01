@@ -47,7 +47,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		return def.promise;
 	}),
 	_getCustom: d(function (key) {
-		return this.levelDb.getPromised(key, getOpts)(function (value) { return value; },
+		return this.levelDb.getPromised('_' + key, getOpts)(function (value) { return value; },
 			function (err) {
 				if (err.notFound) return;
 				throw err;
@@ -66,7 +66,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	_loadAll: d(function () { return this._load(); }),
 	_storeCustom: d(function (key, value) {
 		if (value === undefined) return this.levelDb.delPromised(key);
-		return this.levelDb.putPromised(key, value);
+		return this.levelDb.putPromised('_' + key, value);
 	}),
 	_storeEvent: d(function (event) {
 		return this.levelDb.putPromised(event.object.__valueId__,
