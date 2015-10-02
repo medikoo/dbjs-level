@@ -40,7 +40,9 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			index = data.value.indexOf('.');
 			event = this._importValue(data.key, data.value.slice(index + 1),
 				Number(data.value.slice(0, index)));
-			if (event) result.push(event);
+			if (event) {
+				if (!(result.push(event) % 1000)) def.promise.emit('progress');
+			}
 		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
 			def.resolve(result);
 		});
