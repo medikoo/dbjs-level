@@ -1,6 +1,6 @@
 {
   "name": "dbjs-level",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "leveldb driver for dbjs",
   "author": "Mariusz Nowak <medyk@medikoo.com> (http://www.medikoo.com/)",
   "keywords": [
@@ -12,11 +12,11 @@
     "url": "git://github.com/medikoo/dbjs-level.git"
   },
   "dependencies": {
-    "es5-ext": "^0.10.7",
+    "es5-ext": "^0.10.8",
     "d": "^0.1.1",
     "deferred": "0.7.3",
-    "dbjs": "git://github.com/medikoo/dbjs.git#cf132d44b9f9b21ead1fc38a4b00659ffe09159c",
-    "dbjs-persistence": "0.0.1",
+    "dbjs": "git://github.com/medikoo/dbjs.git#714d5c855d1caa358d841ee5d2e32d264c5e8536",
+    "dbjs-persistence": "0.0.2",
     "levelup": "^1.2.1",
     "timers-ext": "0.1"
   },
