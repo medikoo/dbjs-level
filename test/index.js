@@ -6,7 +6,8 @@ var deferred = require('deferred')
   , Database = require('dbjs')
   , Event    = require('dbjs/_setup/event')
 
-  , dbPath = resolve(__dirname, 'test-db');
+  , dbPath = resolve(__dirname, 'test-db')
+  , dbCopyPath = resolve(__dirname, 'test-db-copy');
 
 require('leveldown');
 
@@ -88,7 +89,27 @@ module.exports = function (t, a, d) {
 				return driver.close();
 			});
 		})(function () {
-			return rmdir(dbPath, { recursive: true, force: true });
+			var db = new Database()
+			  , driver = t(new Database(), { path: dbPath })
+			  , driverCopy = t(db, { path: dbCopyPath });
+			return driver.export(driverCopy)(function () {
+				return driverCopy.loadAll()(function () {
+					a(db.foo.constructor, db.Object);
+					a(db.foo.raz, 'marko');
+					a(db.foo.bal, false);
+					a(db.foo.ole, 767);
+					a(db.aaa.constructor, db.Object);
+					a(db.zzz.constructor, db.Object);
+					a(db.bar.miszka, 343);
+				});
+			})(function () {
+				return deferred(driver.close(), driverCopy.close());
+			});
+		})(function () {
+			return deferred(
+				rmdir(dbPath, { recursive: true, force: true }),
+				rmdir(dbCopyPath, { recursive: true, force: true })
+			);
 		});
 	}).done(function () { d(); }, d);
 };

@@ -110,5 +110,30 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		return this.levelDb.putPromised('=' + id,
 			stamp + '.' + (isArray(value) ? stringify(value) : value));
 	}),
+	_storeRaw: d(function (id, value) {
+		if (id[0] === '_') return this._storeCustom(id.slice(1), value);
+		if (id[0] === '=') return this._storeComputed(id.slice(1), value.value, value.stamp);
+		return this.levelDb.putPromised(id, value.stamp + '.' + value.value);
+	}),
+	_exportAll: d(function (destDriver) {
+		var def, promises = [], count = 0;
+		def = deferred();
+		this.levelDb.createReadStream().on('data', function (data) {
+			var index;
+			if (!(++count % 1000)) def.promise.emit('progress');
+			if (data.key[0] === '_') {
+				promises.push(destDriver._storeRaw(data.key, data.value));
+				return;
+			}
+			index = data.value.indexOf('.');
+			promises.push(destDriver._storeRaw(data.key, {
+				value: data.value.slice(index + 1),
+				stamp: Number(data.value.slice(0, index))
+			}));
+		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+			def.resolve(deferred.map(promises));
+		});
+		return def.promise;
+	}),
 	_close: d(function () { return this.levelDb.closePromised(); })
 });
