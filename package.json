@@ -1,6 +1,6 @@
 {
   "name": "dbjs-level",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "leveldb driver for dbjs",
   "author": "Mariusz Nowak <medyk@medikoo.com> (http://www.medikoo.com/)",
   "keywords": [
@@ -14,18 +14,18 @@
   "dependencies": {
     "es5-ext": "^0.10.7",
     "d": "^0.1.1",
-    "deferred": "0.7.2",
-    "dbjs": "git://github.com/medikoo/dbjs.git#a6915412a585eb5722d0077f60ed6b05a5f7e570",
-    "dbjs-persistence": "git://github.com/medikoo/dbjs-persistence.git#c9fe55526249dab24b",
+    "deferred": "0.7.3",
+    "dbjs": "git://github.com/medikoo/dbjs.git#cf132d44b9f9b21ead1fc38a4b00659ffe09159c",
+    "dbjs-persistence": "0.0.1",
     "levelup": "^1.2.1",
     "timers-ext": "0.1"
   },
   "devDependencies": {
-    "fs2": "^0.2.1",
+    "fs2": "^0.2.3",
     "leveldown": "^1.4",
-    "tad": "^0.2.2",
-    "xlint": "^0.2.1",
-    "xlint-jslint-medikoo": "^0.1.3"
+    "tad": "^0.2.3",
+    "xlint": "^0.2.2",
+    "xlint-jslint-medikoo": "^0.1.4"
   },
   "scripts": {
     "lint": "node node_modules/xlint/bin/xlint --linter=node_modules/xlint-jslint-medikoo/index.js --no-cache --no-stream",
