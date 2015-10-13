@@ -99,8 +99,8 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			if (localKeyPath !== keyPath) return;
 			index = data.value.indexOf('.');
 			value = data.value.slice(index + 1);
-			if (isArray(value)) value = parse(value);
-			map[id] = { value: value, stamp: Number(data.value.slice(0, index)) };
+			if (value[0] === '[') value = parse(value);
+			map[objId] = { value: value, stamp: Number(data.value.slice(0, index)) };
 		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
 			def.resolve(map);
 		});
