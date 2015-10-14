@@ -90,7 +90,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			throw err;
 		});
 	}),
-	_getAllComputed: d(function (keyPath) {
+	_getComputedMap: d(function (keyPath) {
 		var def, map = create(null);
 		def = deferred();
 		this.levelDb.createReadStream({ gte: '=', lte: '=\uffff' }).on('data', function (data) {
