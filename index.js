@@ -80,8 +80,8 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 				value: event.stamp + '.' + serialize(event.value) };
 		}));
 	}),
-	_getComputed: d(function (id) {
-		return this.levelDb.getPromised('=' + id, getOpts)(function (data) {
+	_getComputed: d(function (objId, keyPath) {
+		return this.levelDb.getPromised('=' + objId + '/' + keyPath, getOpts)(function (data) {
 			var index = data.indexOf('.'), value = data.slice(index + 1);
 			if (value[0] === '[') value = parse(value);
 			return { value: value, stamp: Number(data.slice(0, index)) };
@@ -106,9 +106,9 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		});
 		return def.promise;
 	}),
-	_storeComputed: d(function (id, value, stamp) {
-		return this.levelDb.putPromised('=' + id,
-			stamp + '.' + (isArray(value) ? stringify(value) : value));
+	_storeComputed: d(function (objId, keyPath, data) {
+		return this.levelDb.putPromised('=' + objId + '/' + keyPath,
+			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
 	_storeRaw: d(function (id, value) {
 		if (id[0] === '_') return this._storeCustom(id.slice(1), value);
