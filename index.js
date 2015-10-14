@@ -81,7 +81,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		}));
 	}),
 	_getComputed: d(function (objId, keyPath) {
-		return this.levelDb.getPromised('=' + objId + '/' + keyPath, getOpts)(function (data) {
+		return this.levelDb.getPromised('=' + keyPath + ':' + objId, getOpts)(function (data) {
 			var index = data.indexOf('.'), value = data.slice(index + 1);
 			if (value[0] === '[') value = parse(value);
 			return { value: value, stamp: Number(data.slice(0, index)) };
@@ -93,26 +93,29 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	_getComputedMap: d(function (keyPath) {
 		var def, map = create(null);
 		def = deferred();
-		this.levelDb.createReadStream({ gte: '=', lte: '=\uffff' }).on('data', function (data) {
-			var index, id = data.key.slice(1), value
-			  , objId = id.split('/', 1)[0], localKeyPath = id.slice(objId.length + 1);
-			if (localKeyPath !== keyPath) return;
-			index = data.value.indexOf('.');
-			value = data.value.slice(index + 1);
-			if (value[0] === '[') value = parse(value);
-			map[objId] = { value: value, stamp: Number(data.value.slice(0, index)) };
-		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
-			def.resolve(map);
-		});
+		this.levelDb.createReadStream({ gte: '=' + keyPath + ':', lte: '=' + keyPath + ':\uffff' })
+			.on('data', function (data) {
+				var index, value, objId = data.key.slice(data.key.lastIndexOf(':') + 1);
+				index = data.value.indexOf('.');
+				value = data.value.slice(index + 1);
+				if (value[0] === '[') value = parse(value);
+				map[objId] = { value: value, stamp: Number(data.value.slice(0, index)) };
+			}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+				def.resolve(map);
+			});
 		return def.promise;
 	}),
 	_storeComputed: d(function (objId, keyPath, data) {
-		return this.levelDb.putPromised('=' + objId + '/' + keyPath,
+		return this.levelDb.putPromised('=' + keyPath + ':' + objId,
 			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
 	_storeRaw: d(function (id, value) {
+		var index;
 		if (id[0] === '_') return this._storeCustom(id.slice(1), value);
-		if (id[0] === '=') return this._storeComputed(id.slice(1), value.value, value.stamp);
+		if (id[0] === '=') {
+			index = id.lastIndexOf(':');
+			return this._storeComputed(id.slice(index + 1), id.slice(1, index), value);
+		}
 		return this.levelDb.putPromised(id, value.stamp + '.' + value.value);
 	}),
 	_exportAll: d(function (destDriver) {
