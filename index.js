@@ -80,7 +80,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 				value: event.stamp + '.' + serialize(event.value) };
 		}));
 	}),
-	_getComputed: d(function (objId, keyPath) {
+	_getIndexedValue: d(function (objId, keyPath) {
 		return this.levelDb.getPromised('=' + keyPath + ':' + objId, getOpts)(function (data) {
 			var index = data.indexOf('.'), value = data.slice(index + 1);
 			if (value[0] === '[') value = parse(value);
@@ -90,7 +90,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			throw err;
 		});
 	}),
-	_getComputedMap: d(function (keyPath) {
+	_getIndexedMap: d(function (keyPath) {
 		var def, map = create(null);
 		def = deferred();
 		this.levelDb.createReadStream({ gte: '=' + keyPath + ':', lte: '=' + keyPath + ':\uffff' })
@@ -105,7 +105,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			});
 		return def.promise;
 	}),
-	_storeComputed: d(function (objId, keyPath, data) {
+	_storeIndexedValue: d(function (objId, keyPath, data) {
 		return this.levelDb.putPromised('=' + keyPath + ':' + objId,
 			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
@@ -114,7 +114,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		if (id[0] === '_') return this._storeCustom(id.slice(1), value);
 		if (id[0] === '=') {
 			index = id.lastIndexOf(':');
-			return this._storeComputed(id.slice(index + 1), id.slice(1, index), value);
+			return this._storeIndexedValue(id.slice(index + 1), id.slice(1, index), value);
 		}
 		return this.levelDb.putPromised(id, value.stamp + '.' + value.value);
 	}),
