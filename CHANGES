@@ -1,3 +1,6 @@
+v0.0.4  --  2015.10.15
+* Update up to changes in dbjs-persistence
+
 v0.0.3  --  2015.10.14
 * Fix custom keys handling
 * Fix computed properties handling
