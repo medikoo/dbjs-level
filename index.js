@@ -1,6 +1,7 @@
 'use strict';
 
-var setPrototypeOf    = require('es5-ext/object/set-prototype-of')
+var flatten           = require('es5-ext/array/#/flatten')
+  , setPrototypeOf    = require('es5-ext/object/set-prototype-of')
   , ensureString      = require('es5-ext/object/validate-stringifiable-value')
   , ensureObject      = require('es5-ext/object/valid-object')
   , d                 = require('d')
@@ -11,7 +12,8 @@ var setPrototypeOf    = require('es5-ext/object/set-prototype-of')
 
   , isArray = Array.isArray, stringify = JSON.stringify
   , create = Object.create, parse = JSON.parse, promisify = deferred.promisify
-  , getOpts = { fillCache: false };
+  , getOpts = { fillCache: false }
+  , byStamp = function (a, b) { return a.stamp - b.stamp; };
 
 var LevelDriver = module.exports = function (dbjs, data) {
 	var db;
@@ -31,6 +33,22 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	constructor: d(LevelDriver),
 
 	// Any data
+	_getRaw: d(function (id) {
+		var index;
+		if (id[0] === '_') return this._getCustom(id.slice(1));
+		if (id[0] === '=') {
+			index = id.lastIndexOf(':');
+			return this._getIndexedValue(id.slice(index + 1), id.slice(1, index));
+		}
+		return this.levelDb.getPromised(id, getOpts)(function (value) {
+			var index = value.indexOf('.');
+			return { stamp: Number(value.slice(0, index)), value: value.slice(index + 1) };
+		}.bind(this), function (err) {
+			if (err.notFound) return null;
+			throw err;
+		});
+	}),
+	_getRawObject: d(function (objId) { return this._load({ gte: objId, lte: objId + '/\uffff' }); }),
 	_storeRaw: d(function (id, value) {
 		var index;
 		if (id[0] === '_') return this._storeCustom(id.slice(1), value);
@@ -42,36 +60,11 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	}),
 
 	// Database data
-	_load: d(function (data) {
-		var def, result;
-		def = deferred();
-		result = [];
-		this.levelDb.createReadStream(data).on('data', function (data) {
-			var index, event;
-			if (data.key[0] === '=') return; // computed record
-			if (data.key[0] === '_') return; // custom record
-			index = data.value.indexOf('.');
-			event = this._importValue(data.key, data.value.slice(index + 1),
-				Number(data.value.slice(0, index)));
-			if (event) {
-				if (!(result.push(event) % 1000)) def.promise.emit('progress');
-			}
-		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
-			def.resolve(result);
-		});
-		return def.promise;
+	_loadAll: d(function () {
+		return this._load().map(function (data) {
+			return this._importValue(data.id, data.data.value, data.data.stamp);
+		}.bind(this)).invoke(flatten);
 	}),
-	_loadValue: d(function (id) {
-		return this.levelDb.getPromised(id, getOpts)(function (value) {
-			var index = value.indexOf('.');
-			return this._importValue(id, value.slice(index + 1), Number(value.slice(0, index)));
-		}.bind(this), function (err) {
-			if (err.notFound) return null;
-			throw err;
-		});
-	}),
-	_loadObject: d(function (id) { return this._load({ gte: id, lte: id + '/\uffff' }); }),
-	_loadAll: d(function () { return this._load(); }),
 	_storeEvent: d(function (event) {
 		return this.levelDb.putPromised(event.object.__valueId__,
 			event.stamp + '.' + serialize(event.value));
@@ -150,5 +143,26 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	}),
 
 	// Connection related
-	_close: d(function () { return this.levelDb.closePromised(); })
+	_close: d(function () { return this.levelDb.closePromised(); }),
+
+	// Driver specific
+	_load: d(function (data) {
+		var def, result;
+		def = deferred();
+		result = [];
+		this.levelDb.createReadStream(data).on('data', function (data) {
+			var index, event;
+			if (data.key[0] === '=') return; // computed record
+			if (data.key[0] === '_') return; // custom record
+			index = data.value.indexOf('.');
+			event = {
+				id: data.key,
+				data: { stamp: Number(data.value.slice(0, index)), value: data.value.slice(index + 1) }
+			};
+			if (!(result.push(event) % 1000)) def.promise.emit('progress');
+		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+			def.resolve(result.sort(byStamp));
+		});
+		return def.promise;
+	})
 });
