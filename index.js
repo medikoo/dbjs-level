@@ -29,6 +29,19 @@ setPrototypeOf(LevelDriver, PersistenceDriver);
 
 LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	constructor: d(LevelDriver),
+
+	// Any data
+	_storeRaw: d(function (id, value) {
+		var index;
+		if (id[0] === '_') return this._storeCustom(id.slice(1), value);
+		if (id[0] === '=') {
+			index = id.lastIndexOf(':');
+			return this._storeIndexedValue(id.slice(index + 1), id.slice(1, index), value);
+		}
+		return this.levelDb.putPromised(id, value.stamp + '.' + value.value);
+	}),
+
+	// Database data
 	_load: d(function (data) {
 		var def, result;
 		def = deferred();
@@ -48,13 +61,6 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		});
 		return def.promise;
 	}),
-	_getCustom: d(function (key) {
-		return this.levelDb.getPromised('_' + key, getOpts)(function (value) { return parse(value); },
-			function (err) {
-				if (err.notFound) return;
-				throw err;
-			});
-	}),
 	_loadValue: d(function (id) {
 		return this.levelDb.getPromised(id, getOpts)(function (value) {
 			var index = value.indexOf('.');
@@ -66,10 +72,6 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	}),
 	_loadObject: d(function (id) { return this._load({ gte: id, lte: id + '/\uffff' }); }),
 	_loadAll: d(function () { return this._load(); }),
-	_storeCustom: d(function (key, value) {
-		if (value === undefined) return this.levelDb.delPromised(key);
-		return this.levelDb.putPromised('_' + key, stringify(value));
-	}),
 	_storeEvent: d(function (event) {
 		return this.levelDb.putPromised(event.object.__valueId__,
 			event.stamp + '.' + serialize(event.value));
@@ -80,6 +82,8 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 				value: event.stamp + '.' + serialize(event.value) };
 		}));
 	}),
+
+	// Indexed database data
 	_getIndexedValue: d(function (objId, keyPath) {
 		return this.levelDb.getPromised('=' + keyPath + ':' + objId, getOpts)(function (data) {
 			var index = data.indexOf('.'), value = data.slice(index + 1);
@@ -109,15 +113,21 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		return this.levelDb.putPromised('=' + keyPath + ':' + objId,
 			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
-	_storeRaw: d(function (id, value) {
-		var index;
-		if (id[0] === '_') return this._storeCustom(id.slice(1), value);
-		if (id[0] === '=') {
-			index = id.lastIndexOf(':');
-			return this._storeIndexedValue(id.slice(index + 1), id.slice(1, index), value);
-		}
-		return this.levelDb.putPromised(id, value.stamp + '.' + value.value);
+
+	// Custom data
+	_getCustom: d(function (key) {
+		return this.levelDb.getPromised('_' + key, getOpts)(function (value) { return parse(value); },
+			function (err) {
+				if (err.notFound) return;
+				throw err;
+			});
 	}),
+	_storeCustom: d(function (key, value) {
+		if (value === undefined) return this.levelDb.delPromised(key);
+		return this.levelDb.putPromised('_' + key, stringify(value));
+	}),
+
+	// Storage import/export
 	_exportAll: d(function (destDriver) {
 		var def, promises = [], count = 0;
 		def = deferred();
@@ -138,5 +148,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		});
 		return def.promise;
 	}),
+
+	// Connection related
 	_close: d(function () { return this.levelDb.closePromised(); })
 });
