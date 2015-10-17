@@ -13,7 +13,7 @@ var flatten           = require('es5-ext/array/#/flatten')
   , isArray = Array.isArray, stringify = JSON.stringify
   , create = Object.create, parse = JSON.parse, promisify = deferred.promisify
   , getOpts = { fillCache: false }
-  , byStamp = function (a, b) { return a.stamp - b.stamp; };
+  , byStamp = function (a, b) { return a.data.stamp - b.data.stamp; };
 
 var LevelDriver = module.exports = function (dbjs, data) {
 	var db;
