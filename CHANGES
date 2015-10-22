@@ -1,3 +1,7 @@
+v0.0.6  --  2015.10.22
+* Fix progress logging on loadAll
+* Update dbjs-persistence dependency
+
 v0.0.5  --  2015.10.17
 * Update up to changes in dbjs-persistence
 
