@@ -61,9 +61,12 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 
 	// Database data
 	_loadAll: d(function () {
-		return this._load().map(function (data) {
+		var count = 0;
+		var promise = this._load().map(function (data) {
+			if (!(++count % 1000)) promise.emit('progress');
 			return this._importValue(data.id, data.data.value, data.data.stamp);
 		}.bind(this)).invoke(flatten);
+		return promise;
 	}),
 	_storeEvent: d(function (event) {
 		return this.levelDb.putPromised(event.object.__valueId__,
@@ -151,15 +154,14 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		def = deferred();
 		result = [];
 		this.levelDb.createReadStream(data).on('data', function (data) {
-			var index, event;
+			var index;
 			if (data.key[0] === '=') return; // computed record
 			if (data.key[0] === '_') return; // custom record
 			index = data.value.indexOf('.');
-			event = {
+			result.push({
 				id: data.key,
 				data: { stamp: Number(data.value.slice(0, index)), value: data.value.slice(index + 1) }
-			};
-			if (!(result.push(event) % 1000)) def.promise.emit('progress');
+			});
 		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
 			def.resolve(result.sort(byStamp));
 		});
