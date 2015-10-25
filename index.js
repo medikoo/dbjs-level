@@ -6,12 +6,11 @@ var flatten           = require('es5-ext/array/#/flatten')
   , ensureObject      = require('es5-ext/object/valid-object')
   , d                 = require('d')
   , deferred          = require('deferred')
-  , serialize         = require('dbjs/_setup/serialize/value')
   , level             = require('levelup')
   , PersistenceDriver = require('dbjs-persistence/abstract')
 
   , isArray = Array.isArray, stringify = JSON.stringify
-  , create = Object.create, parse = JSON.parse, promisify = deferred.promisify
+  , parse = JSON.parse, promisify = deferred.promisify
   , getOpts = { fillCache: false }
   , byStamp = function (a, b) { return a.data.stamp - b.data.stamp; };
 
@@ -68,15 +67,9 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		}.bind(this)).invoke(flatten);
 		return promise;
 	}),
-	_storeEvent: d(function (event) {
-		return this.levelDb.putPromised(event.object.__valueId__,
-			event.stamp + '.' + serialize(event.value));
-	}),
-	_storeEvents: d(function (events) {
-		return this.levelDb.batchPromised(events.map(function (event) {
-			return { type: 'put', key: event.object.__valueId__,
-				value: event.stamp + '.' + serialize(event.value) };
-		}));
+	_storeEvent: d(function (ownerId, targetPath, data) {
+		var id = ownerId + (targetPath ? ('/' + targetPath) : '');
+		return this.levelDb.putPromised(id, data.stamp + '.' + data.value);
 	}),
 
 	// Indexed database data
@@ -90,37 +83,45 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			throw err;
 		});
 	}),
-	_getIndexedMap: d(function (keyPath) {
-		var def, map = create(null);
-		def = deferred();
+	_storeIndexedValue: d(function (objId, keyPath, data) {
+		return this.levelDb.putPromised('=' + keyPath + ':' + objId,
+			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
+	}),
+
+	// Size tracking
+	_searchDirect: d(function (callback) {
+		return this._load().map(function (data) {
+			if (data.id.indexOf('/') === -1) return;
+			callback(data.id, data.data);
+		});
+	}),
+	_searchIndex: d(function (keyPath, callback) {
+		var def = deferred();
 		this.levelDb.createReadStream({ gte: '=' + keyPath + ':', lte: '=' + keyPath + ':\uffff' })
 			.on('data', function (data) {
 				var index, value, objId = data.key.slice(data.key.lastIndexOf(':') + 1);
 				index = data.value.indexOf('.');
 				value = data.value.slice(index + 1);
 				if (value[0] === '[') value = parse(value);
-				map[objId] = { value: value, stamp: Number(data.value.slice(0, index)) };
+				callback(objId, { value: value, stamp: Number(data.value.slice(0, index)) });
 			}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
-				def.resolve(map);
+				def.resolve();
 			});
 		return def.promise;
-	}),
-	_storeIndexedValue: d(function (objId, keyPath, data) {
-		return this.levelDb.putPromised('=' + keyPath + ':' + objId,
-			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
 
 	// Custom data
 	_getCustom: d(function (key) {
-		return this.levelDb.getPromised('_' + key, getOpts)(function (value) { return parse(value); },
-			function (err) {
-				if (err.notFound) return;
-				throw err;
-			});
+		return this.levelDb.getPromised('_' + key, getOpts)(function (value) {
+			var index = value.indexOf('.');
+			return { stamp: Number(value.slice(0, index)), value: value.slice(index + 1) };
+		}, function (err) {
+			if (err.notFound) return;
+			throw err;
+		});
 	}),
-	_storeCustom: d(function (key, value) {
-		if (value === undefined) return this.levelDb.delPromised(key);
-		return this.levelDb.putPromised('_' + key, stringify(value));
+	_storeCustom: d(function (key, data) {
+		return this.levelDb.putPromised('_' + key, data.stamp + '.' + data.value);
 	}),
 
 	// Storage import/export
