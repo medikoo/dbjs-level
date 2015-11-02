@@ -1,9 +1,11 @@
 'use strict';
 
 var flatten           = require('es5-ext/array/#/flatten')
+  , normalizeOptions  = require('es5-ext/object/normalize-options')
   , setPrototypeOf    = require('es5-ext/object/set-prototype-of')
   , ensureString      = require('es5-ext/object/validate-stringifiable-value')
   , ensureObject      = require('es5-ext/object/valid-object')
+  , rmdir             = require('fs2/rmdir')
   , d                 = require('d')
   , deferred          = require('deferred')
   , level             = require('levelup')
@@ -17,14 +19,12 @@ var flatten           = require('es5-ext/array/#/flatten')
 var LevelDriver = module.exports = function (dbjs, data) {
 	var db;
 	if (!(this instanceof LevelDriver)) return new LevelDriver(dbjs, data);
-	ensureObject(data);
+	this._dbOptions = normalizeOptions(ensureObject(data));
+	// Below is workaround for https://github.com/Raynos/xtend/pull/28
+	this._dbOptions.hasOwnProperty = Object.prototype.hasOwnProperty;
+	this._dbOptions.path = ensureString(this._dbOptions.path);
 	PersistenceDriver.call(this, dbjs, data);
-	db = this.levelDb = level(ensureString(data.path), data);
-	db.getPromised = promisify(db.get);
-	db.putPromised = promisify(db.put);
-	db.delPromised = promisify(db.del);
-	db.batchPromised = promisify(db.batch);
-	db.closePromised = promisify(db.close);
+	this._initialize();
 };
 setPrototypeOf(LevelDriver, PersistenceDriver);
 
@@ -144,6 +144,13 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		});
 		return def.promise;
 	}),
+	_clear: d(function () {
+		return this._close()(function () {
+			return rmdir(this._dbOptions.path, { recursive: true, force: true })(function () {
+				this._initialize();
+			}.bind(this));
+		}.bind(this));
+	}),
 
 	// Connection related
 	_close: d(function () { return this.levelDb.closePromised(); }),
@@ -166,5 +173,13 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			def.resolve(result.sort(byStamp));
 		});
 		return def.promise;
+	}),
+	_initialize: d(function () {
+		var db = this.levelDb = level(this._dbOptions.path, this._dbOptions);
+		db.getPromised = promisify(db.get);
+		db.putPromised = promisify(db.put);
+		db.delPromised = promisify(db.del);
+		db.batchPromised = promisify(db.batch);
+		db.closePromised = promisify(db.close);
 	})
 });
