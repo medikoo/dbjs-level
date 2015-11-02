@@ -91,7 +91,6 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	// Size tracking
 	_searchDirect: d(function (callback) {
 		return this._load().map(function (data) {
-			if (data.id.indexOf('/') === -1) return;
 			callback(data.id, data.data);
 		});
 	}),
