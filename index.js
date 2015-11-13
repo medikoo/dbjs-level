@@ -17,7 +17,6 @@ var flatten           = require('es5-ext/array/#/flatten')
   , byStamp = function (a, b) { return a.data.stamp - b.data.stamp; };
 
 var LevelDriver = module.exports = function (dbjs, data) {
-	var db;
 	if (!(this instanceof LevelDriver)) return new LevelDriver(dbjs, data);
 	this._dbOptions = normalizeOptions(ensureObject(data));
 	// Below is workaround for https://github.com/Raynos/xtend/pull/28
