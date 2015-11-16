@@ -1,20 +1,19 @@
 'use strict';
 
-var flatten           = require('es5-ext/array/#/flatten')
-  , normalizeOptions  = require('es5-ext/object/normalize-options')
+var normalizeOptions  = require('es5-ext/object/normalize-options')
   , setPrototypeOf    = require('es5-ext/object/set-prototype-of')
   , ensureString      = require('es5-ext/object/validate-stringifiable-value')
   , ensureObject      = require('es5-ext/object/valid-object')
+  , resolveKeyPath    = require('dbjs/_setup/utils/resolve-key-path')
   , rmdir             = require('fs2/rmdir')
   , d                 = require('d')
   , deferred          = require('deferred')
   , level             = require('levelup')
   , PersistenceDriver = require('dbjs-persistence/abstract')
 
-  , isArray = Array.isArray, stringify = JSON.stringify
+  , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify
   , parse = JSON.parse, promisify = deferred.promisify
-  , getOpts = { fillCache: false }
-  , byStamp = function (a, b) { return a.data.stamp - b.data.stamp; };
+  , getOpts = { fillCache: false };
 
 var LevelDriver = module.exports = function (dbjs, data) {
 	if (!(this instanceof LevelDriver)) return new LevelDriver(dbjs, data);
@@ -31,14 +30,10 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	constructor: d(LevelDriver),
 
 	// Any data
-	_getRaw: d(function (id) {
-		var index;
-		if (id[0] === '_') return this._getCustom(id.slice(1));
-		if (id[0] === '=') {
-			index = id.lastIndexOf(':');
-			return this._getIndexedValue(id.slice(index + 1), id.slice(1, index));
-		}
-		return this.levelDb.getPromised(id, getOpts)(function (value) {
+	__getRaw: d(function (cat, ns, path) {
+		if (cat === 'reduced') return this._getCustom(ns + (path ? ('/' + path) : ''));
+		if (cat === 'computed') return this._getIndexedValue(path, ns);
+		return this.levelDb.getPromised(ns + (path ? ('/' + path) : ''), getOpts)(function (value) {
 			var index = value.indexOf('.');
 			return { stamp: Number(value.slice(0, index)), value: value.slice(index + 1) };
 		}.bind(this), function (err) {
@@ -46,32 +41,117 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			throw err;
 		});
 	}),
-	_getRawObject: d(function (objId) { return this._load({ gte: objId, lte: objId + '/\uffff' }); }),
-	_storeRaw: d(function (id, value) {
-		var index;
-		if (id[0] === '_') return this._storeCustom(id.slice(1), value);
-		if (id[0] === '=') {
-			index = id.lastIndexOf(':');
-			return this._storeIndexedValue(id.slice(index + 1), id.slice(1, index), value);
-		}
-		return this.levelDb.putPromised(id, value.stamp + '.' + value.value);
+	__getRawObject: d(function (objId, keyPaths) {
+		return this._loadDirect({ gte: objId, lte: objId + '/\uffff' },
+			keyPaths && function (ownerId, path) { return keyPaths.has(resolveKeyPath(path)); });
+	}),
+	__storeRaw: d(function (cat, ns, path, data) {
+		if (cat === 'reduced') return this._storeCustom(ns + (path ? ('/' + path) : ''), data);
+		if (cat === 'computed') return this._storeIndexedValue(path, ns, data);
+		return this.levelDb.putPromised(ns + (path ? ('/' + path) : ''), data.stamp + '.' + data.value);
 	}),
 
 	// Database data
-	_loadAll: d(function () {
-		var count = 0;
-		var promise = this._load().map(function (data) {
-			if (!(++count % 1000)) promise.emit('progress');
-			return this._importValue(data.id, data.data.value, data.data.stamp);
-		}.bind(this)).invoke(flatten);
-		return promise;
+	__getRawAllDirect: d(function () { return this._loadDirect(); }),
+
+	// Size tracking
+	__searchDirect: d(function (callback) {
+		var def = deferred();
+		this.levelDb.createReadStream().on('data', function (data) {
+			var index;
+			if (data.key[0] === '=') return; // computed record
+			if (data.key[0] === '_') return; // custom record
+			index = data.value.indexOf('.');
+			callback(data.key, {
+				stamp: Number(data.value.slice(0, index)),
+				value: data.value.slice(index + 1)
+			});
+		}.bind(this)).on('error', def.reject).on('end', def.resolve);
+		return def.promise;
 	}),
-	_storeEvent: d(function (ownerId, targetPath, data) {
-		var id = ownerId + (targetPath ? ('/' + targetPath) : '');
-		return this.levelDb.putPromised(id, data.stamp + '.' + data.value);
+	__searchIndex: d(function (keyPath, callback) {
+		var def = deferred();
+		this.levelDb.createReadStream({ gte: '=' + keyPath + ':', lte: '=' + keyPath + ':\uffff' })
+			.on('data', function (data) {
+				var index, value, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
+				index = data.value.indexOf('.');
+				value = data.value.slice(index + 1);
+				if (value[0] === '[') value = parse(value);
+				callback(ownerId, { value: value, stamp: Number(data.value.slice(0, index)) });
+			}.bind(this)).on('error', def.reject).on('end', def.resolve);
+		return def.promise;
 	}),
 
-	// Indexed database data
+	// Custom data
+	__getReducedNs: d(function (ns, keyPaths) {
+		var def, result;
+		def = deferred();
+		result = create(null);
+		this.levelDb.createReadStream({ gte: '_' + ns, lte: '_' + ns + '/\uffff' })
+			.on('data', function (data) {
+				var index, path;
+				if (keyPaths) {
+					index = data.key.indexOf('/');
+					path = (index !== -1) ? data.key.slice(index + 1) : null;
+					if (!keyPaths.has(path)) return; // filtered
+				}
+				index = data.value.indexOf('.');
+				result[data.key.slice(1)] = {
+					stamp: Number(data.value.slice(0, index)),
+					value: data.value.slice(index + 1)
+				};
+			}.bind(this)).on('error', def.reject).on('end', function () { def.resolve(result); });
+		return def.promise;
+	}),
+
+	// Storage import/export
+	__exportAll: d(function (destDriver) {
+		var def, promises = [], count = 0;
+		def = deferred();
+		this.levelDb.createReadStream().on('data', function (record) {
+			var index, id, cat, ns, path, data;
+			if (!(++count % 1000)) def.promise.emit('progress');
+			index = record.value.indexOf('.');
+			data = {
+				value: record.value.slice(index + 1),
+				stamp: Number(record.value.slice(0, index))
+			};
+			if (record.key[0] === '=') {
+				cat = 'computed';
+				id = record.key.slice(1);
+				index = id.lastIndexOf(':');
+				ns = id.slice(0, index);
+				path = id.slice(index + 1);
+			} else {
+				if (record.key[0] === '_') {
+					cat = 'reduced';
+					id = record.key.slice(1);
+				} else {
+					id = record.key;
+					cat = 'direct';
+				}
+				index = id.indexOf('/');
+				ns = (index === -1) ? id : id.slice(0, index);
+				path = (index === -1) ? null : id.slice(index + 1);
+			}
+			promises.push(destDriver.__storeRaw(cat, ns, path, data));
+		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+			def.resolve(deferred.map(promises));
+		});
+		return def.promise;
+	}),
+	__clear: d(function () {
+		return this.__close()(function () {
+			return rmdir(this._dbOptions.path, { recursive: true, force: true })(function () {
+				this._initialize();
+			}.bind(this));
+		}.bind(this));
+	}),
+
+	// Connection related
+	__close: d(function () { return this.levelDb.closePromised(); }),
+
+	// Driver specific
 	_getIndexedValue: d(function (objId, keyPath) {
 		return this.levelDb.getPromised('=' + keyPath + ':' + objId, getOpts)(function (data) {
 			var index = data.indexOf('.'), value = data.slice(index + 1);
@@ -86,29 +166,6 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		return this.levelDb.putPromised('=' + keyPath + ':' + objId,
 			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
-
-	// Size tracking
-	_searchDirect: d(function (callback) {
-		return this._load().map(function (data) {
-			callback(data.id, data.data);
-		});
-	}),
-	_searchIndex: d(function (keyPath, callback) {
-		var def = deferred();
-		this.levelDb.createReadStream({ gte: '=' + keyPath + ':', lte: '=' + keyPath + ':\uffff' })
-			.on('data', function (data) {
-				var index, value, objId = data.key.slice(data.key.lastIndexOf(':') + 1);
-				index = data.value.indexOf('.');
-				value = data.value.slice(index + 1);
-				if (value[0] === '[') value = parse(value);
-				callback(objId, { value: value, stamp: Number(data.value.slice(0, index)) });
-			}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
-				def.resolve();
-			});
-		return def.promise;
-	}),
-
-	// Custom data
 	_getCustom: d(function (key) {
 		return this.levelDb.getPromised('_' + key, getOpts)(function (value) {
 			var index = value.indexOf('.');
@@ -121,56 +178,26 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	_storeCustom: d(function (key, data) {
 		return this.levelDb.putPromised('_' + key, data.stamp + '.' + data.value);
 	}),
-
-	// Storage import/export
-	_exportAll: d(function (destDriver) {
-		var def, promises = [], count = 0;
-		def = deferred();
-		this.levelDb.createReadStream().on('data', function (data) {
-			var index;
-			if (!(++count % 1000)) def.promise.emit('progress');
-			if (data.key[0] === '_') {
-				promises.push(destDriver._storeRaw(data.key, data.value));
-				return;
-			}
-			index = data.value.indexOf('.');
-			promises.push(destDriver._storeRaw(data.key, {
-				value: data.value.slice(index + 1),
-				stamp: Number(data.value.slice(0, index))
-			}));
-		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
-			def.resolve(deferred.map(promises));
-		});
-		return def.promise;
-	}),
-	_clear: d(function () {
-		return this._close()(function () {
-			return rmdir(this._dbOptions.path, { recursive: true, force: true })(function () {
-				this._initialize();
-			}.bind(this));
-		}.bind(this));
-	}),
-
-	// Connection related
-	_close: d(function () { return this.levelDb.closePromised(); }),
-
-	// Driver specific
-	_load: d(function (data) {
+	_loadDirect: d(function (data, filter) {
 		var def, result;
 		def = deferred();
-		result = [];
+		result = create(null);
 		this.levelDb.createReadStream(data).on('data', function (data) {
-			var index;
+			var index, ownerId, path;
 			if (data.key[0] === '=') return; // computed record
 			if (data.key[0] === '_') return; // custom record
+			if (filter) {
+				index = data.key.indexOf('/');
+				ownerId = (index !== -1) ? data.key.slice(0, index) : data.key;
+				path = (index !== -1) ? data.key.slice(index + 1) : null;
+				if (!filter(ownerId, path)) return; // filtered
+			}
 			index = data.value.indexOf('.');
-			result.push({
-				id: data.key,
-				data: { stamp: Number(data.value.slice(0, index)), value: data.value.slice(index + 1) }
-			});
-		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
-			def.resolve(result.sort(byStamp));
-		});
+			result[data.key] = {
+				stamp: Number(data.value.slice(0, index)),
+				value: data.value.slice(index + 1)
+			};
+		}.bind(this)).on('error', def.reject).on('end', function () { def.resolve(result); });
 		return def.promise;
 	}),
 	_initialize: d(function () {
