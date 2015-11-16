@@ -31,7 +31,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 
 	// Any data
 	__getRaw: d(function (cat, ns, path) {
-		if (cat === 'reduced') return this._getCustom(ns + (path ? ('/' + path) : ''));
+		if (cat === 'reduced') return this._getReduced(ns + (path ? ('/' + path) : ''));
 		if (cat === 'computed') return this._getIndexedValue(path, ns);
 		return this.levelDb.getPromised(ns + (path ? ('/' + path) : ''), getOpts)(function (value) {
 			var index = value.indexOf('.');
@@ -46,7 +46,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			keyPaths && function (ownerId, path) { return keyPaths.has(resolveKeyPath(path)); });
 	}),
 	__storeRaw: d(function (cat, ns, path, data) {
-		if (cat === 'reduced') return this._storeCustom(ns + (path ? ('/' + path) : ''), data);
+		if (cat === 'reduced') return this._storeReduced(ns + (path ? ('/' + path) : ''), data);
 		if (cat === 'computed') return this._storeIndexedValue(path, ns, data);
 		return this.levelDb.putPromised(ns + (path ? ('/' + path) : ''), data.stamp + '.' + data.value);
 	}),
@@ -60,7 +60,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		this.levelDb.createReadStream().on('data', function (data) {
 			var index;
 			if (data.key[0] === '=') return; // computed record
-			if (data.key[0] === '_') return; // custom record
+			if (data.key[0] === '_') return; // reduced record
 			index = data.value.indexOf('.');
 			callback(data.key, {
 				stamp: Number(data.value.slice(0, index)),
@@ -82,7 +82,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		return def.promise;
 	}),
 
-	// Custom data
+	// Reduced data
 	__getReducedNs: d(function (ns, keyPaths) {
 		var def, result;
 		def = deferred();
@@ -166,7 +166,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		return this.levelDb.putPromised('=' + keyPath + ':' + objId,
 			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
-	_getCustom: d(function (key) {
+	_getReduced: d(function (key) {
 		return this.levelDb.getPromised('_' + key, getOpts)(function (value) {
 			var index = value.indexOf('.');
 			return { stamp: Number(value.slice(0, index)), value: value.slice(index + 1) };
@@ -175,7 +175,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			throw err;
 		});
 	}),
-	_storeCustom: d(function (key, data) {
+	_storeReduced: d(function (key, data) {
 		return this.levelDb.putPromised('_' + key, data.stamp + '.' + data.value);
 	}),
 	_loadDirect: d(function (data, filter) {
@@ -185,7 +185,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		this.levelDb.createReadStream(data).on('data', function (data) {
 			var index, ownerId, path;
 			if (data.key[0] === '=') return; // computed record
-			if (data.key[0] === '_') return; // custom record
+			if (data.key[0] === '_') return; // reduced record
 			if (filter) {
 				index = data.key.indexOf('/');
 				ownerId = (index !== -1) ? data.key.slice(0, index) : data.key;
