@@ -1,19 +1,26 @@
 'use strict';
 
-var normalizeOptions  = require('es5-ext/object/normalize-options')
+var assign            = require('es5-ext/object/assign')
+  , normalizeOptions  = require('es5-ext/object/normalize-options')
   , setPrototypeOf    = require('es5-ext/object/set-prototype-of')
   , ensureString      = require('es5-ext/object/validate-stringifiable-value')
   , ensureObject      = require('es5-ext/object/valid-object')
-  , resolveKeyPath    = require('dbjs/_setup/utils/resolve-key-path')
-  , rmdir             = require('fs2/rmdir')
   , d                 = require('d')
+  , lazy              = require('d/lazy')
   , deferred          = require('deferred')
+  , resolveKeyPath    = require('dbjs/_setup/utils/resolve-key-path')
+  , resolve           = require('path').resolve
+  , mkdir             = require('fs2/mkdir')
+  , rmdir             = require('fs2/rmdir')
   , level             = require('levelup')
   , PersistenceDriver = require('dbjs-persistence/abstract')
 
-  , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify
-  , parse = JSON.parse, promisify = deferred.promisify
+  , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify, parse = JSON.parse
   , getOpts = { fillCache: false };
+
+var makeDb = function (path, options) {
+	return mkdir(path, { intermediate: true })(function () { return level(path, options); });
+};
 
 var LevelDriver = module.exports = function (dbjs, data) {
 	if (!(this instanceof LevelDriver)) return new LevelDriver(dbjs, data);
@@ -22,24 +29,17 @@ var LevelDriver = module.exports = function (dbjs, data) {
 	this._dbOptions.hasOwnProperty = Object.prototype.hasOwnProperty;
 	this._dbOptions.path = ensureString(this._dbOptions.path);
 	PersistenceDriver.call(this, dbjs, data);
-	this._initialize();
 };
 setPrototypeOf(LevelDriver, PersistenceDriver);
 
-LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
+LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	constructor: d(LevelDriver),
 
 	// Any data
 	__getRaw: d(function (cat, ns, path) {
 		if (cat === 'reduced') return this._getReduced(ns + (path ? ('/' + path) : ''));
 		if (cat === 'computed') return this._getComputed(path, ns);
-		return this.levelDb.getPromised(ns + (path ? ('/' + path) : ''), getOpts)(function (value) {
-			var index = value.indexOf('.');
-			return { stamp: Number(value.slice(0, index)), value: value.slice(index + 1) };
-		}.bind(this), function (err) {
-			if (err.notFound) return null;
-			throw err;
-		});
+		return this._getDirect(ns, path);
 	}),
 	__getDirectObject: d(function (objId, keyPaths) {
 		return this._loadDirect({ gte: objId, lte: objId + '/\uffff' },
@@ -48,7 +48,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	__storeRaw: d(function (cat, ns, path, data) {
 		if (cat === 'reduced') return this._storeReduced(ns + (path ? ('/' + path) : ''), data);
 		if (cat === 'computed') return this._storeComputed(path, ns, data);
-		return this.levelDb.putPromised(ns + (path ? ('/' + path) : ''), data.stamp + '.' + data.value);
+		return this._storeDirect(ns, path, data);
 	}),
 
 	// Database data
@@ -56,104 +56,161 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 
 	// Size tracking
 	__searchDirect: d(function (callback) {
-		var def = deferred();
-		this.levelDb.createReadStream().on('data', function (data) {
-			var index;
-			if (data.key[0] === '=') return; // computed record
-			if (data.key[0] === '_') return; // reduced record
-			index = data.value.indexOf('.');
-			callback(data.key, {
-				stamp: Number(data.value.slice(0, index)),
-				value: data.value.slice(index + 1)
-			});
-		}.bind(this)).on('error', def.reject).on('end', def.resolve);
-		return def.promise;
+		return this.directDb(function (db) {
+			var def = deferred();
+			db.createReadStream().on('data', function (data) {
+				var index;
+				index = data.value.indexOf('.');
+				callback(data.key, {
+					stamp: Number(data.value.slice(0, index)),
+					value: data.value.slice(index + 1)
+				});
+			}).on('error', def.reject).on('end', def.resolve);
+			return def.promise;
+		});
 	}),
 	__searchComputed: d(function (keyPath, callback) {
-		var def = deferred();
-		this.levelDb.createReadStream({ gte: '=' + keyPath + ':', lte: '=' + keyPath + ':\uffff' })
-			.on('data', function (data) {
-				var index, value, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
-				index = data.value.indexOf('.');
-				value = data.value.slice(index + 1);
-				if (value[0] === '[') value = parse(value);
-				callback(ownerId, { value: value, stamp: Number(data.value.slice(0, index)) });
-			}.bind(this)).on('error', def.reject).on('end', def.resolve);
-		return def.promise;
+		return this.computedDb(function (db) {
+			var def = deferred();
+			db.createReadStream({ gte: keyPath + ':', lte: keyPath + ':\uffff' })
+				.on('data', function (data) {
+					var index, value, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
+					index = data.value.indexOf('.');
+					value = data.value.slice(index + 1);
+					if (value[0] === '[') value = parse(value);
+					callback(ownerId, { value: value, stamp: Number(data.value.slice(0, index)) });
+				}).on('error', def.reject).on('end', def.resolve);
+			return def.promise;
+		});
 	}),
 
 	// Reduced data
 	__getReducedNs: d(function (ns, keyPaths) {
-		var def, result;
-		def = deferred();
-		result = create(null);
-		this.levelDb.createReadStream({ gte: '_' + ns, lte: '_' + ns + '/\uffff' })
-			.on('data', function (data) {
-				var index, path;
-				if (keyPaths) {
-					index = data.key.indexOf('/');
-					path = (index !== -1) ? data.key.slice(index + 1) : null;
-					if (!keyPaths.has(path)) return; // filtered
-				}
-				index = data.value.indexOf('.');
-				result[data.key.slice(1)] = {
-					stamp: Number(data.value.slice(0, index)),
-					value: data.value.slice(index + 1)
-				};
-			}.bind(this)).on('error', def.reject).on('end', function () { def.resolve(result); });
-		return def.promise;
+		return this.reducedDb(function (db) {
+			var def, result;
+			def = deferred();
+			result = create(null);
+			db.createReadStream({ gte: ns, lte: ns + '/\uffff' })
+				.on('data', function (data) {
+					var index, path;
+					if (keyPaths) {
+						index = data.key.indexOf('/');
+						path = (index !== -1) ? data.key.slice(index + 1) : null;
+						if (!keyPaths.has(path)) return; // filtered
+					}
+					index = data.value.indexOf('.');
+					result[data.key] = {
+						stamp: Number(data.value.slice(0, index)),
+						value: data.value.slice(index + 1)
+					};
+				}).on('error', def.reject).on('end', function () { def.resolve(result); });
+			return def.promise;
+		});
 	}),
 
 	// Storage import/export
 	__exportAll: d(function (destDriver) {
-		var def, promises = [], count = 0;
-		def = deferred();
-		this.levelDb.createReadStream().on('data', function (record) {
-			var index, id, cat, ns, path, data;
-			if (!(++count % 1000)) def.promise.emit('progress');
-			index = record.value.indexOf('.');
-			data = {
-				value: record.value.slice(index + 1),
-				stamp: Number(record.value.slice(0, index))
-			};
-			if (record.key[0] === '=') {
-				cat = 'computed';
-				id = record.key.slice(1);
-				index = id.lastIndexOf(':');
-				ns = id.slice(0, index);
-				path = id.slice(index + 1);
-			} else {
-				if (record.key[0] === '_') {
-					cat = 'reduced';
-					id = record.key.slice(1);
-				} else {
-					id = record.key;
-					cat = 'direct';
-				}
-				index = id.indexOf('/');
-				ns = (index === -1) ? id : id.slice(0, index);
-				path = (index === -1) ? null : id.slice(index + 1);
-			}
-			promises.push(destDriver.__storeRaw(cat, ns, path, data));
-		}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
-			def.resolve(deferred.map(promises));
-		});
-		return def.promise;
+		var count = 0;
+		var promise = deferred(
+			this.directDb(function (db) {
+				var def, promises = [];
+				def = deferred();
+				db.createReadStream().on('data', function (record) {
+					var index, ns, path, data;
+					if (!(++count % 1000)) promise.emit('progress');
+					index = record.value.indexOf('.');
+					data = {
+						value: record.value.slice(index + 1),
+						stamp: Number(record.value.slice(0, index))
+					};
+					index = record.key.indexOf('/');
+					ns = (index === -1) ? record.key : record.key.slice(0, index);
+					path = (index === -1) ? null : record.key.slice(index + 1);
+					promises.push(destDriver.__storeRaw('direct', ns, path, data));
+				}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+					def.resolve(deferred.map(promises));
+				});
+				return def.promise;
+			}),
+			this.computedDb(function (db) {
+				var def, promises = [];
+				def = deferred();
+				db.createReadStream().on('data', function (record) {
+					var index, ns, path, data;
+					if (!(++count % 1000)) promise.emit('progress');
+					index = record.value.indexOf('.');
+					data = {
+						value: record.value.slice(index + 1),
+						stamp: Number(record.value.slice(0, index))
+					};
+					index = record.key.lastIndexOf(':');
+					ns = record.key.slice(0, index);
+					path = record.key.slice(index + 1);
+					promises.push(destDriver.__storeRaw('computed', ns, path, data));
+				}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+					def.resolve(deferred.map(promises));
+				});
+				return def.promise;
+			}),
+			this.reducedDb(function (db) {
+				var def, promises = [];
+				def = deferred();
+				db.createReadStream().on('data', function (record) {
+					var index, ns, path, data;
+					if (!(++count % 1000)) promise.emit('progress');
+					index = record.value.indexOf('.');
+					data = {
+						value: record.value.slice(index + 1),
+						stamp: Number(record.value.slice(0, index))
+					};
+					index = record.key.indexOf('/');
+					ns = (index === -1) ? record.key : record.key.slice(0, index);
+					path = (index === -1) ? null : record.key.slice(index + 1);
+					promises.push(destDriver.__storeRaw('reduced', ns, path, data));
+				}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+					def.resolve(deferred.map(promises));
+				});
+				return def.promise;
+			})
+		)(Function.prototype);
+		return promise;
 	}),
 	__clear: d(function () {
 		return this.__close()(function () {
 			return rmdir(this._dbOptions.path, { recursive: true, force: true })(function () {
-				this._initialize();
+				delete this.directDb;
+				delete this.computedDb;
+				delete this.reducedDb;
 			}.bind(this));
 		}.bind(this));
 	}),
 
 	// Connection related
-	__close: d(function () { return this.levelDb.closePromised(); }),
+	__close: d(function () {
+		return deferred(
+			this.hasOwnProperty('directDb') && this.directDb.invokeAsync('close'),
+			this.hasOwnProperty('computedDb') && this.computedDb.invokeAsync('close'),
+			this.hasOwnProperty('reducedDb') && this.reducedDb.invokeAsync('close')
+		);
+	}),
 
 	// Driver specific
-	_getComputed: d(function (objId, keyPath) {
-		return this.levelDb.getPromised('=' + keyPath + ':' + objId, getOpts)(function (data) {
+	_getDirect: d(function (ownerId, path) {
+		var id = ownerId + (path ? ('/' + path) : '');
+		return this.directDb.invokeAsync('get', id, getOpts)(function (value) {
+			var index = value.indexOf('.');
+			return { stamp: Number(value.slice(0, index)), value: value.slice(index + 1) };
+		}.bind(this), function (err) {
+			if (err.notFound) return null;
+			throw err;
+		});
+	}),
+	_storeDirect: d(function (ownerId, path, data) {
+		return this.directDb.invokeAsync('put', ownerId + (path ? ('/' + path) : ''),
+			data.stamp + '.' + data.value);
+	}),
+	_getComputed: d(function (ownerId, keyPath) {
+		return this.computedDb.invokeAsync('get', keyPath + ':' + ownerId, getOpts)(function (data) {
 			var index = data.indexOf('.'), value = data.slice(index + 1);
 			if (value[0] === '[') value = parse(value);
 			return { value: value, stamp: Number(data.slice(0, index)) };
@@ -163,11 +220,11 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		});
 	}),
 	_storeComputed: d(function (objId, keyPath, data) {
-		return this.levelDb.putPromised('=' + keyPath + ':' + objId,
+		return this.computedDb.invokeAsync('put', keyPath + ':' + objId,
 			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
 	_getReduced: d(function (key) {
-		return this.levelDb.getPromised('_' + key, getOpts)(function (value) {
+		return this.reducedDb.invokeAsync('get', key, getOpts)(function (value) {
 			var index = value.indexOf('.');
 			return { stamp: Number(value.slice(0, index)), value: value.slice(index + 1) };
 		}, function (err) {
@@ -176,36 +233,38 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 		});
 	}),
 	_storeReduced: d(function (key, data) {
-		return this.levelDb.putPromised('_' + key, data.stamp + '.' + data.value);
+		return this.reducedDb.invokeAsync('put', key, data.stamp + '.' + data.value);
 	}),
 	_loadDirect: d(function (data, filter) {
-		var def, result;
-		def = deferred();
-		result = create(null);
-		this.levelDb.createReadStream(data).on('data', function (data) {
-			var index, ownerId, path;
-			if (data.key[0] === '=') return; // computed record
-			if (data.key[0] === '_') return; // reduced record
-			if (filter) {
-				index = data.key.indexOf('/');
-				ownerId = (index !== -1) ? data.key.slice(0, index) : data.key;
-				path = (index !== -1) ? data.key.slice(index + 1) : null;
-				if (!filter(ownerId, path)) return; // filtered
-			}
-			index = data.value.indexOf('.');
-			result[data.key] = {
-				stamp: Number(data.value.slice(0, index)),
-				value: data.value.slice(index + 1)
-			};
-		}.bind(this)).on('error', def.reject).on('end', function () { def.resolve(result); });
-		return def.promise;
-	}),
-	_initialize: d(function () {
-		var db = this.levelDb = level(this._dbOptions.path, this._dbOptions);
-		db.getPromised = promisify(db.get);
-		db.putPromised = promisify(db.put);
-		db.delPromised = promisify(db.del);
-		db.batchPromised = promisify(db.batch);
-		db.closePromised = promisify(db.close);
+		return this.directDb(function (db) {
+			var def, result;
+			def = deferred();
+			result = create(null);
+			db.createReadStream(data).on('data', function (data) {
+				var index, ownerId, path;
+				if (filter) {
+					index = data.key.indexOf('/');
+					ownerId = (index !== -1) ? data.key.slice(0, index) : data.key;
+					path = (index !== -1) ? data.key.slice(index + 1) : null;
+					if (!filter(ownerId, path)) return; // filtered
+				}
+				index = data.value.indexOf('.');
+				result[data.key] = {
+					stamp: Number(data.value.slice(0, index)),
+					value: data.value.slice(index + 1)
+				};
+			}.bind(this)).on('error', def.reject).on('end', function () { def.resolve(result); });
+			return def.promise;
+		});
 	})
-});
+}, lazy({
+	directDb: d(function () {
+		return makeDb(resolve(this._dbOptions.path, 'direct'), this._dbOptions);
+	}),
+	computedDb: d(function () {
+		return makeDb(resolve(this._dbOptions.path, 'computed'), this._dbOptions);
+	}),
+	reducedDb: d(function () {
+		return makeDb(resolve(this._dbOptions.path, 'reduced'), this._dbOptions);
+	})
+})));

@@ -1,7 +1,6 @@
 'use strict';
 
-var deferred = require('deferred')
-  , resolve  = require('path').resolve
+var resolve  = require('path').resolve
   , rmdir    = require('fs2/rmdir')
   , getTests = require('dbjs-persistence/test/_common')
 
@@ -11,9 +10,6 @@ var deferred = require('deferred')
 
 module.exports = function (t, a, d) {
 	return tests.apply(null, arguments)(function () {
-		return deferred(
-			rmdir(dbPath, { recursive: true, force: true }),
-			rmdir(dbCopyPath, { recursive: true, force: true })
-		);
+		return rmdir(dbCopyPath, { recursive: true, force: true });
 	}).done(function () { d(); }, d);
 };
