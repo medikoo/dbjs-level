@@ -32,7 +32,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	// Any data
 	__getRaw: d(function (cat, ns, path) {
 		if (cat === 'reduced') return this._getReduced(ns + (path ? ('/' + path) : ''));
-		if (cat === 'computed') return this._getIndexedValue(path, ns);
+		if (cat === 'computed') return this._getComputedValue(path, ns);
 		return this.levelDb.getPromised(ns + (path ? ('/' + path) : ''), getOpts)(function (value) {
 			var index = value.indexOf('.');
 			return { stamp: Number(value.slice(0, index)), value: value.slice(index + 1) };
@@ -152,7 +152,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	__close: d(function () { return this.levelDb.closePromised(); }),
 
 	// Driver specific
-	_getIndexedValue: d(function (objId, keyPath) {
+	_getComputedValue: d(function (objId, keyPath) {
 		return this.levelDb.getPromised('=' + keyPath + ':' + objId, getOpts)(function (data) {
 			var index = data.indexOf('.'), value = data.slice(index + 1);
 			if (value[0] === '[') value = parse(value);
