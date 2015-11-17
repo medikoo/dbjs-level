@@ -47,7 +47,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 	}),
 	__storeRaw: d(function (cat, ns, path, data) {
 		if (cat === 'reduced') return this._storeReduced(ns + (path ? ('/' + path) : ''), data);
-		if (cat === 'computed') return this._storeIndexedValue(path, ns, data);
+		if (cat === 'computed') return this._storeComputed(path, ns, data);
 		return this.levelDb.putPromised(ns + (path ? ('/' + path) : ''), data.stamp + '.' + data.value);
 	}),
 
@@ -162,7 +162,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, {
 			throw err;
 		});
 	}),
-	_storeIndexedValue: d(function (objId, keyPath, data) {
+	_storeComputed: d(function (objId, keyPath, data) {
 		return this.levelDb.putPromised('=' + keyPath + ':' + objId,
 			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
