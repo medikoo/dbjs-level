@@ -48,8 +48,8 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	}),
 
 	// Database data
-	__getDirectObject: d(function (objId, keyPaths) {
-		return this._loadDirect({ gte: objId, lte: objId + '/\uffff' },
+	__getDirectObject: d(function (ownerId, keyPaths) {
+		return this._loadDirect({ gte: ownerId, lte: ownerId + '/\uffff' },
 			keyPaths && function (ownerId, path) { return keyPaths.has(resolveKeyPath(path)); });
 	}),
 	__getDirectAll: d(function () { return this._loadDirect(); }),
@@ -219,8 +219,8 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 			throw err;
 		});
 	}),
-	_storeComputed: d(function (objId, keyPath, data) {
-		return this.computedDb.invokeAsync('put', keyPath + ':' + objId,
+	_storeComputed: d(function (ownerId, keyPath, data) {
+		return this.computedDb.invokeAsync('put', keyPath + ':' + ownerId,
 			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
 	_getReduced: d(function (key) {
