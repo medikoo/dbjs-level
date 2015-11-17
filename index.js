@@ -41,10 +41,6 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 		if (cat === 'computed') return this._getComputed(path, ns);
 		return this._getDirect(ns, path);
 	}),
-	__getDirectObject: d(function (objId, keyPaths) {
-		return this._loadDirect({ gte: objId, lte: objId + '/\uffff' },
-			keyPaths && function (ownerId, path) { return keyPaths.has(resolveKeyPath(path)); });
-	}),
 	__storeRaw: d(function (cat, ns, path, data) {
 		if (cat === 'reduced') return this._storeReduced(ns + (path ? ('/' + path) : ''), data);
 		if (cat === 'computed') return this._storeComputed(path, ns, data);
@@ -52,6 +48,10 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	}),
 
 	// Database data
+	__getDirectObject: d(function (objId, keyPaths) {
+		return this._loadDirect({ gte: objId, lte: objId + '/\uffff' },
+			keyPaths && function (ownerId, path) { return keyPaths.has(resolveKeyPath(path)); });
+	}),
 	__getDirectAll: d(function () { return this._loadDirect(); }),
 
 	// Size tracking
