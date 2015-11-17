@@ -54,6 +54,30 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	}),
 	__getDirectAll: d(function () { return this._loadDirect(); }),
 
+	// Reduced data
+	__getReducedNs: d(function (ns, keyPaths) {
+		return this.reducedDb(function (db) {
+			var def, result;
+			def = deferred();
+			result = create(null);
+			db.createReadStream({ gte: ns, lte: ns + '/\uffff' })
+				.on('data', function (data) {
+					var index, path;
+					if (keyPaths) {
+						index = data.key.indexOf('/');
+						path = (index !== -1) ? data.key.slice(index + 1) : null;
+						if (!keyPaths.has(path)) return; // filtered
+					}
+					index = data.value.indexOf('.');
+					result[data.key] = {
+						stamp: Number(data.value.slice(0, index)),
+						value: data.value.slice(index + 1)
+					};
+				}).on('error', def.reject).on('end', function () { def.resolve(result); });
+			return def.promise;
+		});
+	}),
+
 	// Size tracking
 	__searchDirect: d(function (callback) {
 		return this.directDb(function (db) {
@@ -80,30 +104,6 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 					if (value[0] === '[') value = parse(value);
 					callback(ownerId, { value: value, stamp: Number(data.value.slice(0, index)) });
 				}).on('error', def.reject).on('end', def.resolve);
-			return def.promise;
-		});
-	}),
-
-	// Reduced data
-	__getReducedNs: d(function (ns, keyPaths) {
-		return this.reducedDb(function (db) {
-			var def, result;
-			def = deferred();
-			result = create(null);
-			db.createReadStream({ gte: ns, lte: ns + '/\uffff' })
-				.on('data', function (data) {
-					var index, path;
-					if (keyPaths) {
-						index = data.key.indexOf('/');
-						path = (index !== -1) ? data.key.slice(index + 1) : null;
-						if (!keyPaths.has(path)) return; // filtered
-					}
-					index = data.value.indexOf('.');
-					result[data.key] = {
-						stamp: Number(data.value.slice(0, index)),
-						value: data.value.slice(index + 1)
-					};
-				}).on('error', def.reject).on('end', function () { def.resolve(result); });
 			return def.promise;
 		});
 	}),
