@@ -13,16 +13,16 @@
   },
   "dependencies": {
     "d": "^0.1.1",
-    "deferred": "0.7.3",
-    "dbjs": "git://github.com/medikoo/dbjs.git#258d1b1662bfca18668c16c46380140960be080c",
-    "dbjs-persistence": "0.0.9",
+    "deferred": "^0.7.4",
+    "dbjs": "git://github.com/medikoo/dbjs.git#ce8dab253927f3319ca85dd7c60c5d6701a1d689",
+    "dbjs-persistence": "0.0.10",
     "es5-ext": "^0.10.8",
-    "levelup": "^1.2.1",
+    "levelup": "^1.3",
     "timers-ext": "0.1"
   },
   "devDependencies": {
     "fs2": "^0.2.3",
-    "leveldown": "^1.4",
+    "leveldown": "^1.4.2",
     "tad": "^0.2.4",
     "xlint": "^0.2.2",
     "xlint-jslint-medikoo": "^0.1.4"
