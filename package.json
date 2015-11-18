@@ -12,11 +12,11 @@
     "url": "git://github.com/medikoo/dbjs-level.git"
   },
   "dependencies": {
-    "es5-ext": "^0.10.8",
     "d": "^0.1.1",
     "deferred": "0.7.3",
     "dbjs": "git://github.com/medikoo/dbjs.git#258d1b1662bfca18668c16c46380140960be080c",
     "dbjs-persistence": "0.0.9",
+    "es5-ext": "^0.10.8",
     "levelup": "^1.2.1",
     "timers-ext": "0.1"
   },
