@@ -50,7 +50,10 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	// Database data
 	__getDirectObject: d(function (ownerId, keyPaths) {
 		return this._loadDirect({ gte: ownerId, lte: ownerId + '/\uffff' },
-			keyPaths && function (ownerId, path) { return keyPaths.has(resolveKeyPath(path)); });
+			keyPaths && function (ownerId, path) {
+				if (!path) return true;
+				return keyPaths.has(resolveKeyPath(ownerId + '/' + path));
+			});
 	}),
 	__getDirectAll: d(function () { return this._loadDirect(); }),
 
