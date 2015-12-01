@@ -3,6 +3,7 @@
 var assign            = require('es5-ext/object/assign')
   , normalizeOptions  = require('es5-ext/object/normalize-options')
   , setPrototypeOf    = require('es5-ext/object/set-prototype-of')
+  , toArray           = require('es5-ext/object/to-array')
   , ensureString      = require('es5-ext/object/validate-stringifiable-value')
   , ensureObject      = require('es5-ext/object/valid-object')
   , d                 = require('d')
@@ -16,7 +17,8 @@ var assign            = require('es5-ext/object/assign')
   , PersistenceDriver = require('dbjs-persistence/abstract')
 
   , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify, parse = JSON.parse
-  , getOpts = { fillCache: false };
+  , getOpts = { fillCache: false }
+  , byStamp = function (a, b) { return this[a] - this[b]; };
 
 var makeDb = function (path, options) {
 	return mkdir(path, { intermediate: true })(function () { return level(path, options); });
@@ -47,7 +49,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 		return this._storeDirect(ns, path, data);
 	}),
 
-	// Database data
+	// Direct data
 	__getDirectObject: d(function (ownerId, keyPaths) {
 		return this._loadDirect({ gte: ownerId, lte: ownerId + '/\uffff' },
 			keyPaths && function (ownerId, path) {
@@ -55,10 +57,29 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 				return keyPaths.has(resolveKeyPath(ownerId + '/' + path));
 			});
 	}),
+	__getDirectAllObjectIds: d(function () {
+		return this.directDb(function (db) {
+			var def = deferred(), data = create(null);
+			db.createReadStream().on('data', function (data) {
+				var index = data.key.indexOf('/'), ownerId;
+				if (index === -1) {
+					index = data.value.indexOf('.');
+					data[data.key] = Number(data.value.slice(0, index));
+					return;
+				}
+				ownerId = data.key.slice(0, index);
+				if (!data[ownerId]) data[ownerId] = 0;
+				return;
+			}).on('error', def.reject).on('end', function () {
+				return toArray(data, function (el, id) { return id; }, this, byStamp);
+			});
+			return def.promise;
+		});
+	}),
 	__getDirectAll: d(function () { return this._loadDirect(); }),
 
 	// Reduced data
-	__getReducedNs: d(function (ns, keyPaths) {
+	__getReducedObject: d(function (ns, keyPaths) {
 		return this.reducedDb(function (db) {
 			var def, result;
 			def = deferred();
@@ -82,31 +103,40 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	}),
 
 	// Size tracking
-	__searchDirect: d(function (callback) {
+	__searchDirect: d(function (keyPath, callback) {
 		return this.directDb(function (db) {
-			var def = deferred();
-			db.createReadStream().on('data', function (data) {
-				var index;
+			var def = deferred(), stream = db.createReadStream();
+			stream.on('data', function (data) {
+				var index, result, recordKeyPath = resolveKeyPath(data.key);
+				if (!keyPath) {
+					if (recordKeyPath) return;
+				} else if (keyPath !== recordKeyPath) {
+					return;
+				}
 				index = data.value.indexOf('.');
-				callback(data.key, {
+				result = callback(data.key, {
 					stamp: Number(data.value.slice(0, index)),
 					value: data.value.slice(index + 1)
 				});
+				if (result) stream.destroy();
 			}).on('error', def.reject).on('end', def.resolve);
 			return def.promise;
 		});
 	}),
 	__searchComputed: d(function (keyPath, callback) {
 		return this.computedDb(function (db) {
-			var def = deferred();
-			db.createReadStream({ gte: keyPath + ':', lte: keyPath + ':\uffff' })
-				.on('data', function (data) {
-					var index, value, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
-					index = data.value.indexOf('.');
-					value = data.value.slice(index + 1);
-					if (value[0] === '[') value = parse(value);
-					callback(ownerId, { value: value, stamp: Number(data.value.slice(0, index)) });
-				}).on('error', def.reject).on('end', def.resolve);
+			var def = deferred()
+			  , stream = db.createReadStream({ gte: keyPath + ':', lte: keyPath + ':\uffff' });
+
+			stream.on('data', function (data) {
+				var index, value, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
+				index = data.value.indexOf('.');
+				value = data.value.slice(index + 1);
+				if (value[0] === '[') value = parse(value);
+				if (callback(ownerId, { value: value, stamp: Number(data.value.slice(0, index)) })) {
+					stream.destroy();
+				}
+			}).on('error', def.reject).on('end', def.resolve);
 			return def.promise;
 		});
 	}),
