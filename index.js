@@ -60,19 +60,16 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	__getDirectAllObjectIds: d(function () {
 		return this.directDb(function (db) {
 			var def = deferred(), data = create(null);
-			db.createReadStream().on('data', function (data) {
-				var index = data.key.indexOf('/'), ownerId;
+			db.createReadStream().on('data', function (record) {
+				var index = record.key.indexOf('/');
 				if (index === -1) {
-					index = data.value.indexOf('.');
-					data[data.key] = Number(data.value.slice(0, index));
-					return;
+					index = record.value.indexOf('.');
+					data[record.key] = {
+						value: record.value.slice(index + 1),
+						stamp: Number(record.value.slice(0, index))
+					};
 				}
-				ownerId = data.key.slice(0, index);
-				if (!data[ownerId]) data[ownerId] = 0;
-				return;
-			}).on('error', def.reject).on('end', function () {
-				return toArray(data, function (el, id) { return id; }, this, byStamp);
-			});
+			}).on('error', def.reject).on('end', function () { def.resolve(data); });
 			return def.promise;
 		});
 	}),
