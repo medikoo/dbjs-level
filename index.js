@@ -3,7 +3,6 @@
 var assign            = require('es5-ext/object/assign')
   , normalizeOptions  = require('es5-ext/object/normalize-options')
   , setPrototypeOf    = require('es5-ext/object/set-prototype-of')
-  , toArray           = require('es5-ext/object/to-array')
   , ensureString      = require('es5-ext/object/validate-stringifiable-value')
   , ensureObject      = require('es5-ext/object/valid-object')
   , d                 = require('d')
@@ -17,8 +16,7 @@ var assign            = require('es5-ext/object/assign')
   , PersistenceDriver = require('dbjs-persistence/abstract')
 
   , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify, parse = JSON.parse
-  , getOpts = { fillCache: false }
-  , byStamp = function (a, b) { return this[a] - this[b]; };
+  , getOpts = { fillCache: false };
 
 var makeDb = function (path, options) {
 	return mkdir(path, { intermediate: true })(function () { return level(path, options); });
