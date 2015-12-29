@@ -39,19 +39,19 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 
 	// Any data
 	__getRaw: d(function (cat, ns, path) {
-		if (cat === 'reduced') return this._getReduced(ns + (path ? ('/' + path) : ''));
-		if (cat === 'computed') return this._getComputed(path, ns);
-		return this._getDirect(ns, path);
+		if (cat === 'reduced') return this._getReduced_(ns + (path ? ('/' + path) : ''));
+		if (cat === 'computed') return this._getComputed_(path, ns);
+		return this._getDirect_(ns, path);
 	}),
 	__storeRaw: d(function (cat, ns, path, data) {
-		if (cat === 'reduced') return this._storeReduced(ns + (path ? ('/' + path) : ''), data);
-		if (cat === 'computed') return this._storeComputed(path, ns, data);
-		return this._storeDirect(ns, path, data);
+		if (cat === 'reduced') return this._storeReduced_(ns + (path ? ('/' + path) : ''), data);
+		if (cat === 'computed') return this._storeComputed_(path, ns, data);
+		return this._storeDirect_(ns, path, data);
 	}),
 
 	// Direct data
 	__getDirectObject: d(function (ownerId, keyPaths) {
-		return this._loadDirect({ gte: ownerId, lte: ownerId + '/\uffff' },
+		return this._loadDirect_({ gte: ownerId, lte: ownerId + '/\uffff' },
 			keyPaths && function (ownerId, path) {
 				if (!path) return true;
 				return keyPaths.has(resolveKeyPath(ownerId + '/' + path));
@@ -73,7 +73,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 			return def.promise;
 		});
 	}),
-	__getDirectAll: d(function () { return this._loadDirect(); }),
+	__getDirectAll: d(function () { return this._loadDirect_(); }),
 
 	// Reduced data
 	__getReducedObject: d(function (ns, keyPaths) {
@@ -225,7 +225,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	}),
 
 	// Driver specific
-	_getDirect: d(function (ownerId, path) {
+	_getDirect_: d(function (ownerId, path) {
 		var id = ownerId + (path ? ('/' + path) : '');
 		return this.directDb.invokeAsync('get', id, getOpts)(function (value) {
 			var index = value.indexOf('.');
@@ -235,11 +235,11 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 			throw err;
 		});
 	}),
-	_storeDirect: d(function (ownerId, path, data) {
+	_storeDirect_: d(function (ownerId, path, data) {
 		return this.directDb.invokeAsync('put', ownerId + (path ? ('/' + path) : ''),
 			data.stamp + '.' + data.value);
 	}),
-	_getComputed: d(function (ownerId, keyPath) {
+	_getComputed_: d(function (ownerId, keyPath) {
 		return this.computedDb.invokeAsync('get', keyPath + ':' + ownerId, getOpts)(function (data) {
 			var index = data.indexOf('.'), value = data.slice(index + 1);
 			if (value[0] === '[') value = parse(value);
@@ -249,11 +249,11 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 			throw err;
 		});
 	}),
-	_storeComputed: d(function (ownerId, keyPath, data) {
+	_storeComputed_: d(function (ownerId, keyPath, data) {
 		return this.computedDb.invokeAsync('put', keyPath + ':' + ownerId,
 			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
 	}),
-	_getReduced: d(function (key) {
+	_getReduced_: d(function (key) {
 		return this.reducedDb.invokeAsync('get', key, getOpts)(function (value) {
 			var index = value.indexOf('.');
 			return { stamp: Number(value.slice(0, index)), value: value.slice(index + 1) };
@@ -262,10 +262,10 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 			throw err;
 		});
 	}),
-	_storeReduced: d(function (key, data) {
+	_storeReduced_: d(function (key, data) {
 		return this.reducedDb.invokeAsync('put', key, data.stamp + '.' + data.value);
 	}),
-	_loadDirect: d(function (data, filter) {
+	_loadDirect_: d(function (data, filter) {
 		return this.directDb(function (db) {
 			var def, result;
 			def = deferred();
