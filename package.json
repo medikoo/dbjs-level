@@ -14,7 +14,7 @@
   "dependencies": {
     "d": "1",
     "deferred": "^0.7.4",
-    "dbjs": "git://github.com/medikoo/dbjs.git#e18cb6c75f865e2965d8436f07333a3f8f356952",
+    "dbjs": "git://github.com/medikoo/dbjs.git#3bb8b3974b57eb7ad3fb08f798706bc085c94185",
     "dbjs-persistence": "0.0.13",
     "es5-ext": "^0.10.11",
     "levelup": "^1.3.1",
