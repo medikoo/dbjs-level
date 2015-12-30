@@ -48,14 +48,14 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	}),
 
 	// Direct data
-	__getDirectObject: d(function (ownerId, keyPaths) {
+	__getObject: d(function (ownerId, keyPaths) {
 		return this._loadDirect_({ gte: ownerId, lte: ownerId + '/\uffff' },
 			keyPaths && function (ownerId, path) {
 				if (!path) return true;
 				return keyPaths.has(resolveKeyPath(ownerId + '/' + path));
 			});
 	}),
-	__getDirectAllObjectIds: d(function () {
+	__getAllObjectIds: d(function () {
 		return this.directDb(function (db) {
 			var def = deferred(), data = create(null);
 			db.createReadStream().on('data', function (record) {
@@ -71,7 +71,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 			return def.promise;
 		});
 	}),
-	__getDirectAll: d(function () { return this._loadDirect_(); }),
+	__getAll: d(function () { return this._loadDirect_(); }),
 
 	// Reduced data
 	__getReducedObject: d(function (ns, keyPaths) {
@@ -98,7 +98,7 @@ LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
 	}),
 
 	// Size tracking
-	__searchDirect: d(function (keyPath, callback) {
+	__search: d(function (keyPath, callback) {
 		return this.directDb(function (db) {
 			var def = deferred(), stream = db.createReadStream();
 			stream.on('data', function (data) {
