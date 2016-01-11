@@ -22,18 +22,18 @@ var makeDb = function (path, options) {
 	return mkdir(path, { intermediate: true })(function () { return level(path, options); });
 };
 
-var LevelDriver = module.exports = function (dbjs, data) {
-	if (!(this instanceof LevelDriver)) return new LevelDriver(dbjs, data);
+var LevelStorage = module.exports = function (dbjs, data) {
+	if (!(this instanceof LevelStorage)) return new LevelStorage(dbjs, data);
 	this._dbOptions = normalizeOptions(ensureObject(data));
 	// Below is workaround for https://github.com/Raynos/xtend/pull/28
 	this._dbOptions.hasOwnProperty = Object.prototype.hasOwnProperty;
 	this._dbOptions.path = ensureString(this._dbOptions.path);
 	PersistenceDriver.call(this, dbjs, data);
 };
-setPrototypeOf(LevelDriver, PersistenceDriver);
+setPrototypeOf(LevelStorage, PersistenceDriver);
 
-LevelDriver.prototype = Object.create(PersistenceDriver.prototype, assign({
-	constructor: d(LevelDriver),
+LevelStorage.prototype = Object.create(PersistenceDriver.prototype, assign({
+	constructor: d(LevelStorage),
 
 	// Any data
 	__getRaw: d(function (cat, ns, path) {
