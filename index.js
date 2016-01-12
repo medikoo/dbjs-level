@@ -1,15 +1,15 @@
 'use strict';
 
 var normalizeOptions = require('es5-ext/object/normalize-options')
-  , setPrototypeOf = require('es5-ext/object/set-prototype-of')
-  , ensureObject   = require('es5-ext/object/valid-object')
-  , ensureString   = require('es5-ext/object/validate-stringifiable-value')
-  , d              = require('d')
-  , deferred       = require('deferred')
-  , resolve        = require('path').resolve
-  , readdir        = require('fs2/readdir')
-  , Driver         = require('dbjs-persistence/driver')
-  , Storage        = require('./storage')
+  , setPrototypeOf   = require('es5-ext/object/set-prototype-of')
+  , ensureObject     = require('es5-ext/object/valid-object')
+  , ensureString     = require('es5-ext/object/validate-stringifiable-value')
+  , d                = require('d')
+  , deferred         = require('deferred')
+  , resolve          = require('path').resolve
+  , readdir          = require('fs2/readdir')
+  , Driver           = require('dbjs-persistence/driver')
+  , Storage          = require('./storage')
 
   , isIdent = RegExp.prototype.test.bind(/^[a-z][a-z0-9A-Z]*$/);
 
