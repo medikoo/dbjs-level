@@ -33,7 +33,7 @@ LevelDriver.prototype = Object.create(Driver.prototype, {
 		return readdir(this.dbPath, { type: { directory: true } }).map(function (name) {
 			if (!isIdent(name)) return;
 			this.getStorage(name);
-		})(Function.prototype);
+		}.bind(this))(Function.prototype);
 	}),
 	__close: d(function () { return deferred(undefined); })
 });
