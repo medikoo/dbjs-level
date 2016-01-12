@@ -1,19 +1,16 @@
 'use strict';
 
-var assign            = require('es5-ext/object/assign')
-  , normalizeOptions  = require('es5-ext/object/normalize-options')
-  , setPrototypeOf    = require('es5-ext/object/set-prototype-of')
-  , ensureString      = require('es5-ext/object/validate-stringifiable-value')
-  , ensureObject      = require('es5-ext/object/valid-object')
-  , d                 = require('d')
-  , lazy              = require('d/lazy')
-  , deferred          = require('deferred')
-  , resolveKeyPath    = require('dbjs/_setup/utils/resolve-key-path')
-  , resolve           = require('path').resolve
-  , mkdir             = require('fs2/mkdir')
-  , rmdir             = require('fs2/rmdir')
-  , level             = require('levelup')
-  , PersistenceDriver = require('dbjs-persistence/abstract')
+var assign           = require('es5-ext/object/assign')
+  , setPrototypeOf   = require('es5-ext/object/set-prototype-of')
+  , d                = require('d')
+  , lazy             = require('d/lazy')
+  , deferred         = require('deferred')
+  , resolveKeyPath   = require('dbjs/_setup/utils/resolve-key-path')
+  , resolve          = require('path').resolve
+  , mkdir            = require('fs2/mkdir')
+  , rmdir            = require('fs2/rmdir')
+  , level            = require('levelup')
+  , Storage          = require('dbjs-persistence/storage')
 
   , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify, parse = JSON.parse
   , getOpts = { fillCache: false };
@@ -22,17 +19,14 @@ var makeDb = function (path, options) {
 	return mkdir(path, { intermediate: true })(function () { return level(path, options); });
 };
 
-var LevelStorage = module.exports = function (dbjs, data) {
-	if (!(this instanceof LevelStorage)) return new LevelStorage(dbjs, data);
-	this._dbOptions = normalizeOptions(ensureObject(data));
-	// Below is workaround for https://github.com/Raynos/xtend/pull/28
-	this._dbOptions.hasOwnProperty = Object.prototype.hasOwnProperty;
-	this._dbOptions.path = ensureString(this._dbOptions.path);
-	PersistenceDriver.call(this, dbjs, data);
+var LevelStorage = module.exports = function (driver, name/*, options*/) {
+	if (!(this instanceof LevelStorage)) return new LevelStorage(driver, name, arguments[2]);
+	Storage.call(this, driver, name, arguments[2]);
+	this.dbPath = resolve(driver.dbPath, name);
 };
-setPrototypeOf(LevelStorage, PersistenceDriver);
+setPrototypeOf(LevelStorage, Storage);
 
-LevelStorage.prototype = Object.create(PersistenceDriver.prototype, assign({
+LevelStorage.prototype = Object.create(Storage.prototype, assign({
 	constructor: d(LevelStorage),
 
 	// Any data
@@ -205,7 +199,7 @@ LevelStorage.prototype = Object.create(PersistenceDriver.prototype, assign({
 	}),
 	__clear: d(function () {
 		return this.__close()(function () {
-			return rmdir(this._dbOptions.path, { recursive: true, force: true })(function () {
+			return rmdir(this.dbPath, { recursive: true, force: true })(function () {
 				delete this.directDb;
 				delete this.computedDb;
 				delete this.reducedDb;
@@ -287,12 +281,12 @@ LevelStorage.prototype = Object.create(PersistenceDriver.prototype, assign({
 	})
 }, lazy({
 	directDb: d(function () {
-		return makeDb(resolve(this._dbOptions.path, 'direct'), this._dbOptions);
+		return makeDb(resolve(this.dbPath, 'direct'), this.driver._dbOptions);
 	}),
 	computedDb: d(function () {
-		return makeDb(resolve(this._dbOptions.path, 'computed'), this._dbOptions);
+		return makeDb(resolve(this.dbPath, 'computed'), this.driver._dbOptions);
 	}),
 	reducedDb: d(function () {
-		return makeDb(resolve(this._dbOptions.path, 'reduced'), this._dbOptions);
+		return makeDb(resolve(this.dbPath, 'reduced'), this.driver._dbOptions);
 	})
 })));
