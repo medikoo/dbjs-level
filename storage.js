@@ -206,6 +206,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 			}.bind(this));
 		}.bind(this));
 	}),
+	__drop: d(function () { return this.__clear(); }),
 
 	// Connection related
 	__close: d(function () {
