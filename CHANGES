@@ -1,3 +1,7 @@
+v0.0.13  --  2015.01.22
+* Update up to changes in dbjs-persistence
+  (driver & storage split)
+
 v0.0.12  --  2015.12.30
 * Update up to changes in dbjs-persistence
 
