@@ -10,6 +10,7 @@ var normalizeOptions = require('es5-ext/object/normalize-options')
   , readdir          = require('fs2/readdir')
   , Driver           = require('dbjs-persistence/driver')
   , Storage          = require('./storage')
+  , ReducedStorage   = require('./reduced-storage')
 
   , isIdent = RegExp.prototype.test.bind(/^[a-z][a-z0-9A-Z]*$/);
 
@@ -23,7 +24,10 @@ var LevelDriver = module.exports = Object.defineProperties(function (data) {
 	this.dbPath = resolve(ensureString(this._dbOptions.path));
 	delete this._dbOptions.path;
 	Driver.call(this, data);
-}, { storageClass: d(Storage) });
+}, {
+	storageClass: d(Storage),
+	reducedStorageClass: d(ReducedStorage)
+});
 setPrototypeOf(LevelDriver, Driver);
 
 LevelDriver.prototype = Object.create(Driver.prototype, {
