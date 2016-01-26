@@ -131,7 +131,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 	}),
 
 	// Storage import/export
-	__exportAll: d(function (destDriver) {
+	__exportAll: d(function (destStorage) {
 		var count = 0;
 		var promise = deferred(
 			this.directDb(function (db) {
@@ -148,7 +148,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 					index = record.key.indexOf('/');
 					ns = (index === -1) ? record.key : record.key.slice(0, index);
 					path = (index === -1) ? null : record.key.slice(index + 1);
-					promises.push(destDriver.__storeRaw('direct', ns, path, data));
+					promises.push(destStorage.__storeRaw('direct', ns, path, data));
 				}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
 					def.resolve(deferred.map(promises));
 				});
@@ -168,7 +168,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 					index = record.key.lastIndexOf(':');
 					ns = record.key.slice(0, index);
 					path = record.key.slice(index + 1);
-					promises.push(destDriver.__storeRaw('computed', ns, path, data));
+					promises.push(destStorage.__storeRaw('computed', ns, path, data));
 				}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
 					def.resolve(deferred.map(promises));
 				});
@@ -188,7 +188,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 					index = record.key.indexOf('/');
 					ns = (index === -1) ? record.key : record.key.slice(0, index);
 					path = (index === -1) ? null : record.key.slice(index + 1);
-					promises.push(destDriver.__storeRaw('reduced', ns, path, data));
+					promises.push(destStorage.__storeRaw('reduced', ns, path, data));
 				}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
 					def.resolve(deferred.map(promises));
 				});
