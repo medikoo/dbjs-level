@@ -1,3 +1,8 @@
+v0.0.15  --  2016.02.06
+* Support custom level constructor
+* Make storage folder names not use capital letters (they're hyphen separated now)
+* Update dbjs-persistence dependency
+
 v0.0.14  --  2016.01.28
 * Update up to changes in dbjs-persistence
   (implementation of global reduced storage)
