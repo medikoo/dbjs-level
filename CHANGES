@@ -1,3 +1,7 @@
+v0.0.16  --  2016.02.06
+* Fix handling of drop/clear calls in case of empty storage
+* Fix support for custom level constructor in reduced storage
+
 v0.0.15  --  2016.02.06
 * Support custom level constructor
 * Make storage folder names not use capital letters (they're hyphen separated now)
