@@ -10,15 +10,10 @@ var assign           = require('es5-ext/object/assign')
   , resolve          = require('path').resolve
   , mkdir            = require('fs2/mkdir')
   , rmdir            = require('fs2/rmdir')
-  , level            = require('levelup')
   , Storage          = require('dbjs-persistence/storage')
 
   , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify, parse = JSON.parse
   , getOpts = { fillCache: false };
-
-var makeDb = function (path, options) {
-	return mkdir(path, { intermediate: true })(function () { return level(path, options); });
-};
 
 var LevelStorage = module.exports = function (driver, name/*, options*/) {
 	if (!(this instanceof LevelStorage)) return new LevelStorage(driver, name, arguments[2]);
@@ -280,15 +275,14 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 			}.bind(this)).on('error', def.reject).on('end', function () { def.resolve(result); });
 			return def.promise;
 		});
+	}),
+	_makeDb_: d(function (path) {
+		return mkdir(path, { intermediate: true })(function () {
+			return this.driver.levelConstructor(path, this.driver._dbOptions);
+		}.bind(this));
 	})
 }, lazy({
-	directDb: d(function () {
-		return makeDb(resolve(this.dbPath, 'direct'), this.driver._dbOptions);
-	}),
-	computedDb: d(function () {
-		return makeDb(resolve(this.dbPath, 'computed'), this.driver._dbOptions);
-	}),
-	reducedDb: d(function () {
-		return makeDb(resolve(this.dbPath, 'reduced'), this.driver._dbOptions);
-	})
+	directDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'direct')); }),
+	computedDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'computed')); }),
+	reducedDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'reduced')); })
 })));

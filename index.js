@@ -2,6 +2,7 @@
 
 var normalizeOptions = require('es5-ext/object/normalize-options')
   , setPrototypeOf   = require('es5-ext/object/set-prototype-of')
+  , ensureCallable   = require('es5-ext/object/valid-callable')
   , ensureObject     = require('es5-ext/object/valid-object')
   , ensureString     = require('es5-ext/object/validate-stringifiable-value')
   , hyphenToCamel    = require('es5-ext/string/#/hyphen-to-camel')
@@ -10,6 +11,7 @@ var normalizeOptions = require('es5-ext/object/normalize-options')
   , resolve          = require('path').resolve
   , readdir          = require('fs2/readdir')
   , Driver           = require('dbjs-persistence/driver')
+  , level            = require('levelup')
   , Storage          = require('./storage')
   , ReducedStorage   = require('./reduced-storage')
 
@@ -24,6 +26,10 @@ var LevelDriver = module.exports = Object.defineProperties(function (data) {
 
 	this.dbPath = resolve(ensureString(this._dbOptions.path));
 	delete this._dbOptions.path;
+	if (this._dbOptions.level != null) {
+		this.levelConstructor = ensureCallable(this._dbOptions.level);
+		delete this._dbOptions.level;
+	}
 	Driver.call(this, data);
 }, {
 	storageClass: d(Storage),
@@ -33,6 +39,8 @@ setPrototypeOf(LevelDriver, Driver);
 
 LevelDriver.prototype = Object.create(Driver.prototype, {
 	constructor: d(LevelDriver),
+
+	levelConstructor: d(level),
 
 	__resolveAllStorages: d(function () {
 		return readdir(this.dbPath, { type: { directory: true } }).map(function (name) {
