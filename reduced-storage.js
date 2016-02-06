@@ -8,15 +8,10 @@ var assign         = require('es5-ext/object/assign')
   , resolve        = require('path').resolve
   , mkdir          = require('fs2/mkdir')
   , rmdir          = require('fs2/rmdir')
-  , level          = require('levelup')
   , ReducedStorage = require('dbjs-persistence/reduced-storage')
 
   , create = Object.create
   , getOpts = { fillCache: false };
-
-var makeDb = function (path, options) {
-	return mkdir(path, { intermediate: true })(function () { return level(path, options); });
-};
 
 var LevelReducedStorage = module.exports = function (driver) {
 	if (!(this instanceof LevelReducedStorage)) return new LevelReducedStorage(driver);
@@ -114,9 +109,12 @@ LevelReducedStorage.prototype = Object.create(ReducedStorage.prototype, assign({
 	}),
 	_store_: d(function (key, data) {
 		return this.reducedDb.invokeAsync('put', key, data.stamp + '.' + data.value);
+	}),
+	_makeDb_: d(function (path) {
+		return mkdir(path, { intermediate: true })(function () {
+			return this.driver.levelConstructor(path, this.driver._dbOptions);
+		}.bind(this));
 	})
 }, lazy({
-	reducedDb: d(function () {
-		return makeDb(this.dbPath, this.driver._dbOptions);
-	})
+	reducedDb: d(function () { return this._makeDb_(this.dbPath); })
 })));
