@@ -89,7 +89,7 @@ LevelReducedStorage.prototype = Object.create(ReducedStorage.prototype, assign({
 	__clear: d(function () {
 		return this.__close()(function () {
 			if (this.hasOwnProperty('reducedDb')) {
-				return rmdir(this.dbPath, { recursive: true, force: true });
+				return rmdir(this.dbPath, { recursive: true, force: true, loose: true });
 			}
 		}.bind(this))(function () {
 			delete this.reducedDb;

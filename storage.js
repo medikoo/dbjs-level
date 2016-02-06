@@ -195,7 +195,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 	}),
 	__clear: d(function () {
 		return this.__close()(function () {
-			return rmdir(this.dbPath, { recursive: true, force: true })(function () {
+			return rmdir(this.dbPath, { recursive: true, force: true, loose: true })(function () {
 				delete this.directDb;
 				delete this.computedDb;
 				delete this.reducedDb;
