@@ -2,6 +2,7 @@
 
 var assign           = require('es5-ext/object/assign')
   , setPrototypeOf   = require('es5-ext/object/set-prototype-of')
+  , camelToHyphen    = require('es5-ext/string/#/camel-to-hyphen')
   , d                = require('d')
   , lazy             = require('d/lazy')
   , deferred         = require('deferred')
@@ -22,7 +23,7 @@ var makeDb = function (path, options) {
 var LevelStorage = module.exports = function (driver, name/*, options*/) {
 	if (!(this instanceof LevelStorage)) return new LevelStorage(driver, name, arguments[2]);
 	Storage.call(this, driver, name, arguments[2]);
-	this.dbPath = resolve(driver.dbPath, name);
+	this.dbPath = resolve(driver.dbPath, camelToHyphen.call(name));
 };
 setPrototypeOf(LevelStorage, Storage);
 

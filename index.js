@@ -4,6 +4,7 @@ var normalizeOptions = require('es5-ext/object/normalize-options')
   , setPrototypeOf   = require('es5-ext/object/set-prototype-of')
   , ensureObject     = require('es5-ext/object/valid-object')
   , ensureString     = require('es5-ext/object/validate-stringifiable-value')
+  , hyphenToCamel    = require('es5-ext/string/#/hyphen-to-camel')
   , d                = require('d')
   , deferred         = require('deferred')
   , resolve          = require('path').resolve
@@ -12,7 +13,7 @@ var normalizeOptions = require('es5-ext/object/normalize-options')
   , Storage          = require('./storage')
   , ReducedStorage   = require('./reduced-storage')
 
-  , isIdent = RegExp.prototype.test.bind(/^[a-z][a-z0-9A-Z]*$/);
+  , isIdent = RegExp.prototype.test.bind(/^[a-z][a-z0-9\-]*$/);
 
 var LevelDriver = module.exports = Object.defineProperties(function (data) {
 	if (!(this instanceof LevelDriver)) return new LevelDriver(data);
@@ -36,7 +37,7 @@ LevelDriver.prototype = Object.create(Driver.prototype, {
 	__resolveAllStorages: d(function () {
 		return readdir(this.dbPath, { type: { directory: true } }).map(function (name) {
 			if (!isIdent(name)) return;
-			this.getStorage(name);
+			this.getStorage(hyphenToCamel.call(name));
 		}.bind(this))(Function.prototype);
 	}),
 	__close: d(function () { return deferred(undefined); })
