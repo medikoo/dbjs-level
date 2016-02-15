@@ -57,7 +57,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 						stamp: Number(record.value.slice(0, index))
 					};
 				}
-			}).on('error', def.reject).on('end', function () { def.resolve(data); });
+			}).on('error', def.reject).on('close', function () { def.resolve(data); });
 			return def.promise;
 		});
 	}),
@@ -82,7 +82,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 						stamp: Number(data.value.slice(0, index)),
 						value: data.value.slice(index + 1)
 					};
-				}).on('error', def.reject).on('end', function () { def.resolve(result); });
+				}).on('error', def.reject).on('close', function () { def.resolve(result); });
 			return def.promise;
 		});
 	}),
@@ -104,7 +104,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 					value: data.value.slice(index + 1)
 				});
 				if (result) stream.destroy();
-			}).on('error', def.reject).on('end', def.resolve);
+			}).on('error', def.reject).on('close', def.resolve);
 			return def.promise;
 		});
 	}),
@@ -121,7 +121,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 				if (callback(ownerId, { value: value, stamp: Number(data.value.slice(0, index)) })) {
 					stream.destroy();
 				}
-			}).on('error', def.reject).on('end', def.resolve);
+			}).on('error', def.reject).on('close', def.resolve);
 			return def.promise;
 		});
 	}),
@@ -145,7 +145,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 					ns = (index === -1) ? record.key : record.key.slice(0, index);
 					path = (index === -1) ? null : record.key.slice(index + 1);
 					promises.push(destStorage.__storeRaw('direct', ns, path, data));
-				}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+				}.bind(this)).on('error', function (err) { def.reject(err); }).on('close', function () {
 					def.resolve(deferred.map(promises));
 				});
 				return def.promise;
@@ -165,7 +165,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 					ns = record.key.slice(0, index);
 					path = record.key.slice(index + 1);
 					promises.push(destStorage.__storeRaw('computed', ns, path, data));
-				}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+				}.bind(this)).on('error', function (err) { def.reject(err); }).on('close', function () {
 					def.resolve(deferred.map(promises));
 				});
 				return def.promise;
@@ -185,7 +185,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 					ns = (index === -1) ? record.key : record.key.slice(0, index);
 					path = (index === -1) ? null : record.key.slice(index + 1);
 					promises.push(destStorage.__storeRaw('reduced', ns, path, data));
-				}.bind(this)).on('error', function (err) { def.reject(err); }).on('end', function () {
+				}.bind(this)).on('error', function (err) { def.reject(err); }).on('close', function () {
 					def.resolve(deferred.map(promises));
 				});
 				return def.promise;
@@ -272,7 +272,7 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 					stamp: Number(data.value.slice(0, index)),
 					value: data.value.slice(index + 1)
 				};
-			}.bind(this)).on('error', def.reject).on('end', function () { def.resolve(result); });
+			}.bind(this)).on('error', def.reject).on('close', function () { def.resolve(result); });
 			return def.promise;
 		});
 	}),
