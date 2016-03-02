@@ -1,16 +1,17 @@
 'use strict';
 
-var assign           = require('es5-ext/object/assign')
-  , setPrototypeOf   = require('es5-ext/object/set-prototype-of')
-  , camelToHyphen    = require('es5-ext/string/#/camel-to-hyphen')
-  , d                = require('d')
-  , lazy             = require('d/lazy')
-  , deferred         = require('deferred')
-  , resolveKeyPath   = require('dbjs/_setup/utils/resolve-key-path')
-  , resolve          = require('path').resolve
-  , mkdir            = require('fs2/mkdir')
-  , rmdir            = require('fs2/rmdir')
-  , Storage          = require('dbjs-persistence/storage')
+var assign         = require('es5-ext/object/assign')
+  , setPrototypeOf = require('es5-ext/object/set-prototype-of')
+  , camelToHyphen  = require('es5-ext/string/#/camel-to-hyphen')
+  , d              = require('d')
+  , lazy           = require('d/lazy')
+  , deferred       = require('deferred')
+  , resolveKeyPath = require('dbjs/_setup/utils/resolve-key-path')
+  , resolve        = require('path').resolve
+  , mkdir          = require('fs2/mkdir')
+  , rmdir          = require('fs2/rmdir')
+  , Storage        = require('dbjs-persistence/storage')
+  , resolveValue   = require('dbjs-persistence/lib/resolve-direct-value')
 
   , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify, parse = JSON.parse
   , getOpts = { fillCache: false };
@@ -38,12 +39,15 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 	}),
 
 	// Direct data
-	__getObject: d(function (ownerId, keyPaths) {
-		return this._loadDirect_({ gte: ownerId, lte: ownerId + '/\uffff' },
-			keyPaths && function (ownerId, path) {
-				if (!path) return true;
-				return keyPaths.has(resolveKeyPath(ownerId + '/' + path));
-			});
+	__getObject: d(function (ownerId, objectPath, keyPaths) {
+		var query = {
+			gte: ownerId + (objectPath ? '/' + objectPath : ''),
+			lte: ownerId + (objectPath ? '/' + objectPath : '') + '/\uffff'
+		};
+		return this._loadDirect_(query, keyPaths && function (ownerId, path) {
+			if (!path) return true;
+			return keyPaths.has(resolveKeyPath(ownerId + '/' + path));
+		});
 	}),
 	__getAllObjectIds: d(function () {
 		return this.directDb(function (db) {
@@ -87,21 +91,30 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 		});
 	}),
 
-	// Size tracking
-	__search: d(function (keyPath, callback) {
+	__search: d(function (keyPath, value, callback) {
 		return this.directDb(function (db) {
 			var def = deferred(), stream = db.createReadStream();
 			stream.on('data', function (data) {
-				var index, result, recordKeyPath = resolveKeyPath(data.key);
-				if (!keyPath) {
-					if (recordKeyPath) return;
-				} else if (keyPath !== recordKeyPath) {
-					return;
+				var index, result, recordKeyPath = resolveKeyPath(data.key), recordValue
+				  , resolvedValue, ownerId, path;
+				if (keyPath !== undefined) {
+					if (!keyPath) {
+						if (recordKeyPath) return;
+					} else if (keyPath !== recordKeyPath) {
+						return;
+					}
 				}
 				index = data.value.indexOf('.');
+				recordValue = data.value.slice(index + 1);
+				if (value != null) {
+					ownerId = data.key.split('/', 1)[0];
+					path = data.key.slice(ownerId.length + 1) || null;
+					resolvedValue = resolveValue(ownerId, path, recordValue);
+					if (value !== resolvedValue) return;
+				}
 				result = callback(data.key, {
 					stamp: Number(data.value.slice(0, index)),
-					value: data.value.slice(index + 1)
+					value: recordValue
 				});
 				if (result) stream.destroy();
 			}).on('error', def.reject).on('close', def.resolve);
