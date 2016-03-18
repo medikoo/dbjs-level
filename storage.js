@@ -1,17 +1,18 @@
 'use strict';
 
-var assign         = require('es5-ext/object/assign')
-  , setPrototypeOf = require('es5-ext/object/set-prototype-of')
-  , camelToHyphen  = require('es5-ext/string/#/camel-to-hyphen')
-  , d              = require('d')
-  , lazy           = require('d/lazy')
-  , deferred       = require('deferred')
-  , resolveKeyPath = require('dbjs/_setup/utils/resolve-key-path')
-  , resolve        = require('path').resolve
-  , mkdir          = require('fs2/mkdir')
-  , rmdir          = require('fs2/rmdir')
-  , Storage        = require('dbjs-persistence/storage')
-  , resolveValue   = require('dbjs-persistence/lib/resolve-direct-value')
+var assign              = require('es5-ext/object/assign')
+  , setPrototypeOf      = require('es5-ext/object/set-prototype-of')
+  , camelToHyphen       = require('es5-ext/string/#/camel-to-hyphen')
+  , d                   = require('d')
+  , lazy                = require('d/lazy')
+  , deferred            = require('deferred')
+  , resolveKeyPath      = require('dbjs/_setup/utils/resolve-key-path')
+  , resolve             = require('path').resolve
+  , mkdir               = require('fs2/mkdir')
+  , rmdir               = require('fs2/rmdir')
+  , Storage             = require('dbjs-persistence/storage')
+  , resolveValue        = require('dbjs-persistence/lib/resolve-direct-value')
+  , filterComputedValue = require('dbjs-persistence/lib/filter-computed-value')
 
   , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify, parse = JSON.parse
   , getOpts = { fillCache: false };
@@ -121,17 +122,19 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 			return def.promise;
 		});
 	}),
-	__searchComputed: d(function (keyPath, callback) {
+	__searchComputed: d(function (keyPath, value, callback) {
 		return this.computedDb(function (db) {
-			var def = deferred()
-			  , stream = db.createReadStream({ gte: keyPath + ':', lte: keyPath + ':\uffff' });
+			var def = deferred(), stream, query;
+			if (keyPath) query = { gte: keyPath + ':', lte: keyPath + ':\uffff' };
+			stream = db.createReadStream(query);
 
 			stream.on('data', function (data) {
-				var index, value, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
+				var index, recordValue, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
 				index = data.value.indexOf('.');
-				value = data.value.slice(index + 1);
-				if (value[0] === '[') value = parse(value);
-				if (callback(ownerId, { value: value, stamp: Number(data.value.slice(0, index)) })) {
+				recordValue = data.value.slice(index + 1);
+				if (recordValue[0] === '[') recordValue = parse(recordValue);
+				if ((value != null) && !filterComputedValue(value, recordValue)) return;
+				if (callback(ownerId, { value: recordValue, stamp: Number(data.value.slice(0, index)) })) {
 					stream.destroy();
 				}
 			}).on('error', def.reject).on('close', def.resolve);
