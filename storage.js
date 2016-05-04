@@ -92,56 +92,6 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 		});
 	}),
 
-	__search: d(function (keyPath, value, callback) {
-		return this.directDb(function (db) {
-			var def = deferred(), stream = db.createReadStream();
-			stream.on('data', function (data) {
-				var index, result, recordKeyPath = resolveKeyPath(data.key), recordValue
-				  , resolvedValue, ownerId, path;
-				if (keyPath !== undefined) {
-					if (!keyPath) {
-						if (recordKeyPath) return;
-					} else if (keyPath !== recordKeyPath) {
-						return;
-					}
-				}
-				index = data.value.indexOf('.');
-				recordValue = data.value.slice(index + 1);
-				if (value != null) {
-					ownerId = data.key.split('/', 1)[0];
-					path = data.key.slice(ownerId.length + 1) || null;
-					resolvedValue = resolveValue(ownerId, path, recordValue);
-					if (value !== resolvedValue) return;
-				}
-				result = callback(data.key, {
-					stamp: Number(data.value.slice(0, index)),
-					value: recordValue
-				});
-				if (result) stream.destroy();
-			}).on('error', def.reject).on('close', def.resolve);
-			return def.promise;
-		});
-	}),
-	__searchComputed: d(function (keyPath, value, callback) {
-		return this.computedDb(function (db) {
-			var def = deferred(), stream, query;
-			if (keyPath) query = { gte: keyPath + ':', lte: keyPath + ':\uffff' };
-			stream = db.createReadStream(query);
-
-			stream.on('data', function (data) {
-				var index, recordValue, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
-				index = data.value.indexOf('.');
-				recordValue = data.value.slice(index + 1);
-				if (recordValue[0] === '[') recordValue = parse(recordValue);
-				if ((value != null) && !filterComputedValue(value, recordValue)) return;
-				if (callback(ownerId, { value: recordValue, stamp: Number(data.value.slice(0, index)) })) {
-					stream.destroy();
-				}
-			}).on('error', def.reject).on('close', def.resolve);
-			return def.promise;
-		});
-	}),
-
 	// Storage import/export
 	__exportAll: d(function (destStorage) {
 		var count = 0;
@@ -298,6 +248,61 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 		}.bind(this));
 	})
 }, lazy({
+	__search: d(function () {
+		return deferred.gate(function (keyPath, value, callback) {
+			return this.directDb(function (db) {
+				var def = deferred(), stream = db.createReadStream();
+				stream.on('data', function (data) {
+					var index, result, recordKeyPath = resolveKeyPath(data.key), recordValue
+					  , resolvedValue, ownerId, path;
+					if (keyPath !== undefined) {
+						if (!keyPath) {
+							if (recordKeyPath) return;
+						} else if (keyPath !== recordKeyPath) {
+							return;
+						}
+					}
+					index = data.value.indexOf('.');
+					recordValue = data.value.slice(index + 1);
+					if (value != null) {
+						ownerId = data.key.split('/', 1)[0];
+						path = data.key.slice(ownerId.length + 1) || null;
+						resolvedValue = resolveValue(ownerId, path, recordValue);
+						if (value !== resolvedValue) return;
+					}
+					result = callback(data.key, {
+						stamp: Number(data.value.slice(0, index)),
+						value: recordValue
+					});
+					if (result) stream.destroy();
+				}).on('error', def.reject).on('close', def.resolve);
+				return def.promise;
+			});
+		}, 1);
+	}),
+	__searchComputed: d(function () {
+		return deferred.gate(function (keyPath, value, callback) {
+			return this.computedDb(function (db) {
+				var def = deferred(), stream, query;
+				if (keyPath) query = { gte: keyPath + ':', lte: keyPath + ':\uffff' };
+				stream = db.createReadStream(query);
+
+				stream.on('data', function (data) {
+					var index, recordValue, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
+					index = data.value.indexOf('.');
+					recordValue = data.value.slice(index + 1);
+					if (recordValue[0] === '[') recordValue = parse(recordValue);
+					if ((value != null) && !filterComputedValue(value, recordValue)) return;
+					if (callback(ownerId,
+							{ value: recordValue, stamp: Number(data.value.slice(0, index)) })) {
+						stream.destroy();
+					}
+				}).on('error', def.reject).on('close', def.resolve);
+				return def.promise;
+			});
+		}, 1);
+	}),
+
 	directDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'direct')); }),
 	computedDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'computed')); }),
 	reducedDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'reduced')); })
