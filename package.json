@@ -1,6 +1,6 @@
 {
   "name": "dbjs-level",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "leveldb driver for dbjs",
   "author": "Mariusz Nowak <medyk@medikoo.com> (http://www.medikoo.com/)",
   "keywords": [
