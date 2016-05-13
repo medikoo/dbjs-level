@@ -10,7 +10,7 @@ var assign         = require('es5-ext/object/assign')
   , rmdir          = require('fs2/rmdir')
   , ReducedStorage = require('dbjs-persistence/reduced-storage')
 
-  , create = Object.create
+  , nextTick = process.nextTick, create = Object.create
   , getOpts = { fillCache: false };
 
 var LevelReducedStorage = module.exports = function (driver) {
@@ -108,7 +108,9 @@ LevelReducedStorage.prototype = Object.create(ReducedStorage.prototype, assign({
 		});
 	}),
 	_store_: d(function (key, data) {
-		return this.reducedDb.invokeAsync('put', key, data.stamp + '.' + data.value);
+		return this._reducedDbBatch_(function (batch) {
+			batch.put(key, data.stamp + '.' + data.value);
+		})(this._reducedDbBatchDeferred_.promise);
 	}),
 	_makeDb_: d(function (path) {
 		return mkdir(path, { intermediate: true })(function () {
@@ -116,5 +118,21 @@ LevelReducedStorage.prototype = Object.create(ReducedStorage.prototype, assign({
 		}.bind(this));
 	})
 }, lazy({
-	reducedDb: d(function () { return this._makeDb_(this.dbPath); })
+	reducedDb: d(function () { return this._makeDb_(this.dbPath); }),
+	_reducedDbBatchDeferred_: d(function () { return deferred(); }),
+	_reducedDbBatch_: d(function () {
+		return this.reducedDb(function (db) {
+			var batch = db.batch();
+			nextTick(function () {
+				var def = this._reducedDbBatchDeferred_;
+				delete this._reducedDbBatch_;
+				delete this._reducedDbBatchDeferred_;
+				batch.write(function (err) {
+					if (err) def.reject(err);
+					else def.resolve();
+				});
+			}.bind(this));
+			return batch;
+		}.bind(this));
+	})
 })));

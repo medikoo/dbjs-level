@@ -15,5 +15,4 @@ plusplus
 stupid
 vars
 
-./test
-predef+ __dirname
+predef+ __dirname, process

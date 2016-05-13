@@ -14,6 +14,7 @@ var assign              = require('es5-ext/object/assign')
   , resolveValue        = require('dbjs-persistence/lib/resolve-direct-value')
   , filterComputedValue = require('dbjs-persistence/lib/filter-computed-value')
 
+  , nextTick = process.nextTick
   , isArray = Array.isArray, create = Object.create, stringify = JSON.stringify, parse = JSON.parse
   , getOpts = { fillCache: false };
 
@@ -191,8 +192,9 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 		});
 	}),
 	_storeDirect_: d(function (ownerId, path, data) {
-		return this.directDb.invokeAsync('put', ownerId + (path ? ('/' + path) : ''),
-			data.stamp + '.' + data.value);
+		return this._directDbBatch_(function (batch) {
+			batch.put(ownerId + (path ? ('/' + path) : ''), data.stamp + '.' + data.value);
+		})(this._directDbBatchDeferred_.promise);
 	}),
 	_getComputed_: d(function (ownerId, keyPath) {
 		return this.computedDb.invokeAsync('get', keyPath + ':' + ownerId, getOpts)(function (data) {
@@ -205,8 +207,10 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 		});
 	}),
 	_storeComputed_: d(function (ownerId, keyPath, data) {
-		return this.computedDb.invokeAsync('put', keyPath + ':' + ownerId,
-			data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
+		return this._computedDbBatch_(function (batch) {
+			batch.put(keyPath + ':' + ownerId,
+				data.stamp + '.' + (isArray(data.value) ? stringify(data.value) : data.value));
+		})(this._computedDbBatchDeferred_.promise);
 	}),
 	_getReduced_: d(function (key) {
 		return this.reducedDb.invokeAsync('get', key, getOpts)(function (value) {
@@ -218,7 +222,9 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 		});
 	}),
 	_storeReduced_: d(function (key, data) {
-		return this.reducedDb.invokeAsync('put', key, data.stamp + '.' + data.value);
+		return this._reducedDbBatch_(function (batch) {
+			batch.put(key, data.stamp + '.' + data.value);
+		})(this._reducedDbBatchDeferred_.promise);
 	}),
 	_loadDirect_: d(function (data, filter) {
 		return this.directDb(function (db) {
@@ -304,6 +310,56 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 	}),
 
 	directDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'direct')); }),
+	_directDbBatchDeferred_: d(function () { return deferred(); }),
+	_directDbBatch_: d(function () {
+		return this.directDb(function (db) {
+			var batch = db.batch();
+			nextTick(function () {
+				var def = this._directDbBatchDeferred_;
+				delete this._directDbBatch_;
+				delete this._directDbBatchDeferred_;
+				batch.write(function (err) {
+					if (err) def.reject(err);
+					else def.resolve();
+				});
+			}.bind(this));
+			return batch;
+		}.bind(this));
+	}),
+
 	computedDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'computed')); }),
-	reducedDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'reduced')); })
+	_computedDbBatchDeferred_: d(function () { return deferred(); }),
+	_computedDbBatch_: d(function () {
+		return this.computedDb(function (db) {
+			var batch = db.batch();
+			nextTick(function () {
+				var def = this._computedDbBatchDeferred_;
+				delete this._computedDbBatch_;
+				delete this._computedDbBatchDeferred_;
+				batch.write(function (err) {
+					if (err) def.reject(err);
+					else def.resolve();
+				});
+			}.bind(this));
+			return batch;
+		}.bind(this));
+	}),
+
+	reducedDb: d(function () { return this._makeDb_(resolve(this.dbPath, 'reduced')); }),
+	_reducedDbBatchDeferred_: d(function () { return deferred(); }),
+	_reducedDbBatch_: d(function () {
+		return this.reducedDb(function (db) {
+			var batch = db.batch();
+			nextTick(function () {
+				var def = this._reducedDbBatchDeferred_;
+				delete this._reducedDbBatch_;
+				delete this._reducedDbBatchDeferred_;
+				batch.write(function (err) {
+					if (err) def.reject(err);
+					else def.resolve();
+				});
+			}.bind(this));
+			return batch;
+		}.bind(this));
+	})
 })));
