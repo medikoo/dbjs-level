@@ -294,12 +294,14 @@ LevelStorage.prototype = Object.create(Storage.prototype, assign({
 				stream = db.createReadStream(query);
 
 				stream.on('data', function (data) {
-					var index, recordValue, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1);
+					var index, recordValue, ownerId = data.key.slice(data.key.lastIndexOf(':') + 1)
+					  , recordKeyPath = keyPath || data.key.slice(0, -(ownerId.length + 1));
+
 					index = data.value.indexOf('.');
 					recordValue = data.value.slice(index + 1);
 					if (recordValue[0] === '[') recordValue = parse(recordValue);
 					if ((value != null) && !filterComputedValue(value, recordValue)) return;
-					if (callback(ownerId,
+					if (callback(ownerId + '/' + recordKeyPath,
 							{ value: recordValue, stamp: Number(data.value.slice(0, index)) })) {
 						stream.destroy();
 					}
